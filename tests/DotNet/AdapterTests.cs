@@ -59,7 +59,7 @@ namespace Mightys.Pulse.Tests
                 Assert.Equal(Names(fixture.RootElement[0]), Names(actual));
                 Assert.Equal(Names(fixture.RootElement[0].GetProperty("system")), Names(actual.GetProperty("system")));
                 Assert.Equal("pulse-dotnet", actual.GetProperty("system").GetProperty("sdkName").GetString());
-                Assert.Equal("0.9.0", actual.GetProperty("system").GetProperty("sdkVersion").GetString());
+                Assert.Equal("0.9.1", actual.GetProperty("system").GetProperty("sdkVersion").GetString());
                 Assert.EndsWith("Z", actual.GetProperty("timestamp").GetString());
                 Assert.Equal(4.5, actual.GetProperty("value").GetDouble());
                 Assert.DoesNotContain("synthetic-person", actual.GetRawText());

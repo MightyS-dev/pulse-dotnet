@@ -4,6 +4,17 @@ All notable changes to this package are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the package follows
 [Semantic Versioning](https://semver.org/).
 
+## [0.9.1] - 2026-11-15
+
+### Changed
+
+- Signals from Debug builds of your app are now marked as test data by default; Release builds send real data.
+  `PulseOptions.Debug` still overrides this in both directions.
+
+### Added
+
+- README: a Test mode section that explains how signals are marked as test or real.
+
 ## [0.9.0] - 2026-11-15
 
 Initial public release.

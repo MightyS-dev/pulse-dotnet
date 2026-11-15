@@ -13,7 +13,7 @@ namespace Mightys.Pulse.Tests
     public sealed class SerializationTests
     {
         [Fact]
-        public async Task MatchesFirstPartyFixtureStructureAndV1Headers()
+        public async Task MatchesFixtureStructureAndV1Headers()
         {
             var h = new Harness(); h.Runtime.SetUser("synthetic-user");
             await h.Send("purchase", 4.5, new Dictionary<string, object> { ["item"] = "coins", ["amount"] = 2 });

@@ -2,11 +2,11 @@
   <PropertyGroup>
     <TargetFrameworks>netstandard2.0;net8.0</TargetFrameworks>
     <PackageId>Mightys.Pulse</PackageId>
-    <Version>0.9.0</Version>
-    <Title>MightyS Pulse</Title>
+    <Version>0.9.1</Version>
+    <Title>MightyS Pulse for .NET</Title>
     <Authors>MightyS Team</Authors>
     <Copyright>Copyright (c) MightyS Team 2026</Copyright>
-    <Description>Privacy-first analytics for apps and games. No device IDs, offline queue, tiny. Send named signals with an optional number and a few properties from any .NET app or game, and see them in your MightyS Pulse dashboard. A user id is optional and hashed on the device, and signals are queued on disk while offline. Targets netstandard2.0 and net8.0, no package dependencies.</Description>
+    <Description>Privacy-first analytics for .NET apps and games on desktop, mobile and console. Send named events with an optional number and a few properties and see them in the MightyS Pulse dashboard. No device IDs, optional user id hashed on the device, offline queue on disk. Targets netstandard2.0 and net8.0 with no package dependencies.</Description>
     <PackageProjectUrl>https://pulse.mightys.dev</PackageProjectUrl>
     <RepositoryUrl>https://github.com/MightyS-dev/pulse-dotnet</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
@@ -14,11 +14,11 @@
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageIcon>icon.png</PackageIcon>
-    <PackageReleaseNotes>Initial public release: named signals with an optional number and properties, optional hashed user id, persistent opt-out, batched delivery with an offline queue on disk and retries with backoff.</PackageReleaseNotes>
+    <PackageReleaseNotes>Signals from Debug builds are now marked as test data by default; Release builds send real data. Set PulseOptions.Debug to choose yourself. The README has a new Test mode section.</PackageReleaseNotes>
     <IncludeSymbols>true</IncludeSymbols>
     <SymbolPackageFormat>snupkg</SymbolPackageFormat>
     <EmbedUntrackedSources>true</EmbedUntrackedSources>
-    <PackageTags>analytics privacy telemetry events app-analytics game-analytics offline maui wpf winforms avalonia godot csharp dotnet</PackageTags>
+    <PackageTags>analytics privacy privacy-first telemetry events event-tracking app-analytics product-analytics game-analytics offline dotnet csharp netstandard maui wpf winforms avalonia</PackageTags>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <SharedCore>$(PulseCoreDir)</SharedCore>
   </PropertyGroup>
@@ -50,6 +50,11 @@
         var versioned = Regex.Replace(contracts, "(public const string Version = \")[^\"]*(\";)", "${1}" + SdkVersion + "${2}");
         if (!versioned.Contains("Version = \"" + SdkVersion + "\"")) { Log.LogError("Shared version constant not found; check the .NET core adaptation."); return false; }
         contracts = versioned;
+        // State this package's default for PulseOptions.Debug in the public XML docs.
+        var debugDoc = "/// <summary>Marks signals as test data and enables diagnostic logging through the platform logger.</summary>";
+        var debugDocNew = "/// <summary>Marks signals as test data and enables diagnostic logging through the platform logger. When you do not set it, signals are marked as test data if the application's entry assembly was built in Debug configuration, and as real data otherwise (also when there is no entry assembly). An explicit true or false always wins. The default is decided once, at <c>Initialize</c>.</summary>";
+        if (!contracts.Contains(debugDoc)) { Log.LogError("Shared Debug option documentation not found; check the .NET core adaptation."); return false; }
+        contracts = contracts.Replace(debugDoc, debugDocNew);
         var pulse = File.ReadAllText(Path.Combine(SharedCore, "Pulse.cs"));
         var runtime = Regex.Replace(pulse, @"(?s)    public static class Pulse\s*\{.*?(?=    // The facade)", "");
         if (runtime.Contains("public static class Pulse"))

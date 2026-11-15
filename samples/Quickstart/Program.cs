@@ -9,8 +9,9 @@ if (string.IsNullOrWhiteSpace(key))
     return 2;
 }
 
-// Debug = true marks these signals as test data in the dashboard.
-Pulse.Initialize(key, new PulseOptions { Debug = true }, new PulsePlatformOptions { Logger = Console.WriteLine });
+// A Debug build (the default for dotnet run) marks these signals as test data; a Release build sends real ones.
+// Set PulseOptions.Debug to choose yourself.
+Pulse.Initialize(key, new PulseOptions(), new PulsePlatformOptions { Logger = Console.WriteLine });
 
 Pulse.Track("app_start");
 Pulse.Track("level_complete", 42);

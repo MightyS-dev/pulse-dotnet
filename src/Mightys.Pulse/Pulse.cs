@@ -56,14 +56,16 @@ namespace Mightys.Pulse
         private readonly IClock clock;
         private readonly IStorage testStorage;
         private readonly ITransport testTransport;
+        private readonly Func<bool> debugDefault;
         private PulsePlatformOptions platform = new PulsePlatformOptions();
         private HttpClientTransport ownedTransport;
         private bool initialized, stopping;
         private Task stop;
 
-        internal PulseHost(IClock clock = null, IStorage storage = null, ITransport transport = null)
+        internal PulseHost(IClock clock = null, IStorage storage = null, ITransport transport = null, Func<bool> debugDefault = null)
         {
             this.clock = clock ?? new SystemClock(); testStorage = storage; testTransport = transport;
+            this.debugDefault = debugDefault ?? (() => BuildMode.EntryIsDebugBuild());
             Runtime = new PulseRuntime(this.clock);
             Runtime.InstallPlatform(CreateClient, Log, () => PulseClient.ReadStoredOptOut(Storage()));
         }
@@ -89,6 +91,8 @@ namespace Mightys.Pulse
                     if (initialized || stopping) return;
                     platform = new PulsePlatformOptions { StorageDirectory = requested?.StorageDirectory,
                         EnvironmentInfo = requested?.EnvironmentInfo, Logger = requested?.Logger };
+                    // The default for PulseOptions.Debug is decided here, once. An explicit option still wins.
+                    PulseInfo.DebugBuild = debugDefault();
                     Runtime.Initialize(appKey, options);
                 }
             }

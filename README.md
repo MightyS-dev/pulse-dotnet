@@ -1,6 +1,8 @@
 # MightyS Pulse for .NET
 
-Privacy-first analytics for apps and games. No device IDs, offline queue, tiny.
+Privacy-first analytics for .NET apps and games. No device IDs, offline queue, no dependencies.
+
+Docs: https://pulse.mightys.dev/docs/dotnet/
 
 MightyS Pulse lets a .NET app or game send named signals (events) with an optional number and a few properties, and see
 them in a dashboard. It is a plain library for `netstandard2.0` and `net8.0` with no package dependencies, so it can be
@@ -15,7 +17,7 @@ dotnet add package Mightys.Pulse
 or in a project file:
 
 ```xml
-<PackageReference Include="Mightys.Pulse" Version="0.9.0" />
+<PackageReference Include="Mightys.Pulse" Version="0.9.1" />
 ```
 
 ## Quick start
@@ -70,11 +72,28 @@ Pulse.Initialize("YOUR_APP_KEY",
 | `PulseOptions.MaxQueueSize` | 1000 | Signals kept queued, 1 to 1000000. The oldest are dropped first. |
 | `PulseOptions.MaxQueueAgeDays` | 7 | Age after which a queued signal is dropped. Maximum 29. |
 | `PulseOptions.Gzip` | `true` | Compress request bodies larger than 1024 bytes. |
-| `PulseOptions.Debug` | `false` | Marks signals as test data and sends diagnostic messages to `Logger`. |
+| `PulseOptions.Debug` | Debug build: `true`, otherwise `false` | Marks signals as test data and sends diagnostic messages to `Logger`. See Test mode. |
 | `PulseOptions.AppVersion` | detected | Overrides the detected app version. |
 | `PulsePlatformOptions.StorageDirectory` | per-app folder, see Requirements | Folder for the offline queue. |
 | `PulsePlatformOptions.EnvironmentInfo` | detected | OS and app details to send, for hosts where detection does not fit. |
 | `PulsePlatformOptions.Logger` | none | Receives diagnostic strings when `Debug` is on. Do not block in it. |
+
+## Test mode
+
+Every signal carries a `debug` flag; `true` means test data, and the dashboard's test mode switch chooses whether you see
+test signals or real ones. One app key serves both. If you do not set `PulseOptions.Debug`, a Debug build of your app sends
+test signals and a Release build sends real ones. The library checks how your app's entry assembly was compiled; an
+attached debugger and environment variables make no difference. Hosts that have no entry assembly
+count as real, so set `Debug` yourself there. An explicit `true` or `false` always wins, and the choice is made once, in
+`Initialize`:
+
+```csharp
+Pulse.Initialize("YOUR_APP_KEY", new PulseOptions {
+#if DEBUG
+    Debug = true,
+#endif
+});
+```
 
 ## Delivery and offline behavior
 
