@@ -19,8 +19,8 @@ namespace Mightys.Pulse
         public string AppVersion { get; }
         /// <summary>Application build number, empty when unknown.</summary>
         public string AppBuildNumber { get; }
-        /// <summary>Always empty; no device model is collected.</summary>
-        public string DeviceModel => "";
+        /// <summary>Device model supplied by the host. Without one: PC on Windows, Desktop on Linux, the hardware model on macOS (for example Mac14,2, or Mac when unreadable), and empty on Android and iOS.</summary>
+        public string DeviceModel { get; }
         /// <summary>UI locale name.</summary>
         public string Locale { get; }
         /// <summary>Always empty.</summary>
@@ -30,22 +30,53 @@ namespace Mightys.Pulse
 
         /// <summary>Detects the OS, OS version, entry assembly version and UI locale of the running process.</summary>
         public DotNetEnvironmentInfo() : this(CurrentOs(), Environment.OSVersion.Version.ToString(),
-            EntryVersion(), "", CultureInfo.CurrentUICulture.Name) { }
+            EntryVersion(), "", CultureInfo.CurrentUICulture.Name, null) { }
 
         /// <summary>Creates a snapshot from values supplied by the host, for example MAUI <c>DeviceInfo</c> and <c>AppInfo</c>.
         /// <param name="osName">Platform name such as Windows, WinUI, macOS, MacCatalyst, Linux, Android or iOS.</param>
         /// <param name="osVersion">OS version string.</param>
         /// <param name="appVersion">Application version.</param>
         /// <param name="appBuildNumber">Application build number.</param>
-        /// <param name="locale">UI locale name; defaults to the current UI culture.</param></summary>
+        /// <param name="locale">UI locale name; defaults to the current UI culture.</param>
+        /// <param name="deviceModel">Device model, for example MAUI <c>DeviceInfo.Model</c>; defaults as described for <see cref="DeviceModel"/>.</param></summary>
         public DotNetEnvironmentInfo(string osName, string osVersion, string appVersion = "",
-            string appBuildNumber = "", string locale = null)
+            string appBuildNumber = "", string locale = null, string deviceModel = null)
         {
             OsName = NormalizeOs(osName);
             Platform = OsName == "Android" || OsName == "iOS" ? "mobile" : "desktop";
             OsVersion = SignalJson.OsVersionNumber(osVersion);
             AppVersion = appVersion ?? ""; AppBuildNumber = appBuildNumber ?? "";
             Locale = locale ?? CultureInfo.CurrentUICulture.Name;
+            DeviceModel = string.IsNullOrWhiteSpace(deviceModel) ? DefaultModel(OsName) : deviceModel;
+        }
+
+        private static string DefaultModel(string osName)
+        {
+            switch (osName)
+            {
+                case "Windows": return "PC";
+                case "Linux": return "Desktop";
+                case "macOS": return MacModel() ?? "Mac";
+                default: return "";
+            }
+        }
+
+        [DllImport("libc", EntryPoint = "sysctlbyname")]
+        private static extern int SysctlByName(string name, byte[] value, ref IntPtr length, IntPtr newValue, IntPtr newLength);
+
+        // Hardware model such as Mac14,2, read without any permission. Null when it cannot be read.
+        private static string MacModel()
+        {
+            try
+            {
+                if (!RuntimeInformation.IsOSPlatform(OSPlatform.OSX)) return null;
+                var buffer = new byte[128]; var length = (IntPtr)buffer.Length;
+                if (SysctlByName("hw.model", buffer, ref length, IntPtr.Zero, IntPtr.Zero) != 0) return null;
+                var count = (int)length; if (count > 0 && buffer[count - 1] == 0) count--;
+                var text = System.Text.Encoding.UTF8.GetString(buffer, 0, count).Trim();
+                return text.Length == 0 || text.Length > 64 ? null : text;
+            }
+            catch (Exception) { return null; }
         }
 
         private static string NormalizeOs(string name)

@@ -52,7 +52,9 @@ namespace Mightys.Pulse
     internal sealed class PulseHost
     {
         private readonly object gate = new object();
+        private readonly object storageGate = new object();
         internal readonly PulseRuntime Runtime;
+        internal readonly InstallId InstallId;
         private readonly IClock clock;
         private readonly IStorage testStorage;
         private readonly ITransport testTransport;
@@ -67,20 +69,27 @@ namespace Mightys.Pulse
             this.clock = clock ?? new SystemClock(); testStorage = storage; testTransport = transport;
             this.debugDefault = debugDefault ?? (() => BuildMode.EntryIsDebugBuild());
             Runtime = new PulseRuntime(this.clock);
-            Runtime.InstallPlatform(CreateClient, Log, () => PulseClient.ReadStoredOptOut(Storage()));
+            InstallId = new InstallId(Storage);
+            Runtime.InstallPlatform(CreateClient, Log, () => PulseClient.ReadStoredOptOut(Storage()), InstallId.Hash, InstallId.Forget);
         }
 
-        private IStorage Storage() => testStorage ?? new FileStorage(platform.StorageDirectory ?? PulseStorage.DefaultDirectory);
+        // One lock for every storage call of this host, so the install id and the queue never touch storage at once.
+        private IStorage Storage() => new SerializedStorage(testStorage ?? new FileStorage(platform.StorageDirectory ?? PulseStorage.DefaultDirectory), storageGate);
         private void Log(string message) { try { platform.Logger?.Invoke(message); } catch (Exception) { } }
         private PulseClient CreateClient(string key, PulseOptions options, bool? optOut)
         {
             var storage = Storage();
             var environment = platform.EnvironmentInfo ?? new DotNetEnvironmentInfo();
             var transport = testTransport ?? (ownedTransport = new HttpClientTransport());
+            // Read or create the install id before the client's worker starts using storage.
+            if (optOut != true && !StoredOptOutSafe(storage)) InstallId.Prime();
             var client = new PulseClient(key, options, clock, transport, storage, environment, Log, initialOptOut: optOut);
             initialized = true;
             return client;
         }
+
+        private static bool StoredOptOutSafe(IStorage storage)
+        { try { return PulseClient.ReadStoredOptOut(storage); } catch (Exception) { return true; } }
 
         internal void Initialize(string appKey, PulseOptions options, PulsePlatformOptions requested = null)
         {
@@ -119,5 +128,17 @@ namespace Mightys.Pulse
 
         private static async Task BoundedStopAsync(Task save)
         { try { await Task.WhenAny(save, Task.Delay(Pulse.FinalSaveTimeout)).ConfigureAwait(false); } catch (Exception) { } }
+    }
+
+    // Serializes calls to the wrapped storage, because the queue worker and the install id both use it.
+    internal sealed class SerializedStorage : IStorage
+    {
+        private readonly IStorage inner;
+        private readonly object gate;
+        internal SerializedStorage(IStorage inner, object gate) { this.inner = inner; this.gate = gate; }
+        public byte[] Read(string name) { lock (gate) return inner.Read(name); }
+        public void Append(string name, byte[] bytes) { lock (gate) inner.Append(name, bytes); }
+        public void Replace(string name, byte[] bytes) { lock (gate) inner.Replace(name, bytes); }
+        public void Delete(string name) { lock (gate) inner.Delete(name); }
     }
 }

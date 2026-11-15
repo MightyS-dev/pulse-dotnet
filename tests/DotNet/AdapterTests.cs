@@ -59,7 +59,7 @@ namespace Mightys.Pulse.Tests
                 Assert.Equal(Names(fixture.RootElement[0]), Names(actual));
                 Assert.Equal(Names(fixture.RootElement[0].GetProperty("system")), Names(actual.GetProperty("system")));
                 Assert.Equal("pulse-dotnet", actual.GetProperty("system").GetProperty("sdkName").GetString());
-                Assert.Equal("0.9.1", actual.GetProperty("system").GetProperty("sdkVersion").GetString());
+                Assert.Equal("0.9.2", actual.GetProperty("system").GetProperty("sdkVersion").GetString());
                 Assert.EndsWith("Z", actual.GetProperty("timestamp").GetString());
                 Assert.Equal(4.5, actual.GetProperty("value").GetDouble());
                 Assert.DoesNotContain("synthetic-person", actual.GetRawText());
@@ -89,7 +89,7 @@ namespace Mightys.Pulse.Tests
             var info = new DotNetEnvironmentInfo(os, version, "1.2.3", "42", "sr-RS");
             Assert.Equal(platform, info.Platform); Assert.Equal(name, info.OsName); Assert.Equal(number, info.OsVersion);
             Assert.Equal("1.2.3", info.AppVersion); Assert.Equal("42", info.AppBuildNumber); Assert.Equal("sr-RS", info.Locale);
-            Assert.Empty(info.DeviceModel); Assert.Empty(info.BundleId); Assert.Empty(info.SigningCertSha256);
+            Assert.Empty(info.BundleId); Assert.Empty(info.SigningCertSha256);
             Assert.DoesNotContain("private", SignalJson.SystemJson(info, new PulseOptions()));
         }
 

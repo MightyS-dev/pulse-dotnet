@@ -2,11 +2,11 @@
   <PropertyGroup>
     <TargetFrameworks>netstandard2.0;net8.0</TargetFrameworks>
     <PackageId>Mightys.Pulse</PackageId>
-    <Version>0.9.1</Version>
+    <Version>0.9.2</Version>
     <Title>MightyS Pulse for .NET</Title>
     <Authors>MightyS Team</Authors>
     <Copyright>Copyright (c) MightyS Team 2026</Copyright>
-    <Description>Privacy-first analytics for .NET apps and games on desktop, mobile and console. Send named events with an optional number and a few properties and see them in the MightyS Pulse dashboard. No device IDs, optional user id hashed on the device, offline queue on disk. Targets netstandard2.0 and net8.0 with no package dependencies.</Description>
+    <Description>Privacy-first analytics for .NET apps and games on desktop, mobile and console. Send named events with an optional number and a few properties and see them in the MightyS Pulse dashboard. No device IDs, anonymous hashed install id, optional user id hashed on the device, offline queue on disk. Targets netstandard2.0 and net8.0 with no package dependencies.</Description>
     <PackageProjectUrl>https://pulse.mightys.dev</PackageProjectUrl>
     <RepositoryUrl>https://github.com/MightyS-dev/pulse-dotnet</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
@@ -14,7 +14,7 @@
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageIcon>icon.png</PackageIcon>
-    <PackageReleaseNotes>Signals from Debug builds are now marked as test data by default; Release builds send real data. Set PulseOptions.Debug to choose yourself. The README has a new Test mode section.</PackageReleaseNotes>
+    <PackageReleaseNotes>Users are counted without any setup: the SDK sends a random anonymous install id (hashed) until you call SetUser. The device model is now reported on desktop.</PackageReleaseNotes>
     <IncludeSymbols>true</IncludeSymbols>
     <SymbolPackageFormat>snupkg</SymbolPackageFormat>
     <EmbedUntrackedSources>true</EmbedUntrackedSources>

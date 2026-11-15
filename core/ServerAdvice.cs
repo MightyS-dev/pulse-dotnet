@@ -5,7 +5,7 @@ using System.Text;
 
 namespace Mightys.Pulse
 {
-    // Server-generated v1 scheduling fields from the ingest v1 contract.
+    // Scheduling fields the server may return with a response.
     internal sealed class ServerAdvice
     {
         internal double? RecommendedSendIntervalSeconds;

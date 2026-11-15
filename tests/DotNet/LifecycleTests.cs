@@ -146,7 +146,8 @@ namespace Mightys.Pulse.Tests
                 clock.Advance(1800); host.Runtime.Track("new.session"); await host.Runtime.Flush().WaitAsync(TimeSpan.FromSeconds(10));
                 var later = Harness.Event(transport.Requests.Last());
                 Assert.NotEqual(early[0].GetProperty("sessionId").GetString(), later.GetProperty("sessionId").GetString());
-                Assert.False(later.TryGetProperty("userHash", out _));
+                Assert.Equal(64, later.GetProperty("userHash").GetString().Length);
+                Assert.NotEqual(SignalJson.Hash("early-user"), later.GetProperty("userHash").GetString());
                 var tasks = Enumerable.Range(0, 10).Select(t => Task.Run(() =>
                 { for (var i = 0; i < 1000; i++) host.Runtime.Track("concurrent", t * 1000 + i); }));
                 await Task.WhenAll(tasks); await host.Runtime.Flush().WaitAsync(TimeSpan.FromSeconds(10));

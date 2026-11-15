@@ -4,6 +4,15 @@ All notable changes to this package are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the package follows
 [Semantic Versioning](https://semver.org/).
 
+## [0.9.2] - 2026-11-15
+
+### Changed
+
+- Users are counted without any setup: the SDK sends a random anonymous install id (hashed) until you call `Pulse.SetUser`.
+  The id is stored in the SDK's own folder next to the offline queue and is deleted on opt-out.
+- `DotNetEnvironmentInfo` now reports a device model: pass your own (for example MAUI `DeviceInfo.Model`) or get PC on
+  Windows, Desktop on Linux and the hardware model on macOS (Mac when unreadable). It is empty on Android and iOS unless you pass one.
+
 ## [0.9.1] - 2026-11-15
 
 ### Changed

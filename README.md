@@ -17,7 +17,7 @@ dotnet add package Mightys.Pulse
 or in a project file:
 
 ```xml
-<PackageReference Include="Mightys.Pulse" Version="0.9.1" />
+<PackageReference Include="Mightys.Pulse" Version="0.9.2" />
 ```
 
 ## Quick start
@@ -32,6 +32,9 @@ Pulse.Track("purchase", 4.99, new Dictionary<string, object> { ["sku"] = "gems_1
 await Pulse.Flush();                        // optional: send what is queued now
 ```
 
+That is all it takes: users are counted without any further setup. If your app has its own user id, you can call
+`Pulse.SetUser("your-user-id")` to use it instead of the anonymous install id (optional).
+
 Call `Initialize` once at startup. `Track` is thread safe. Public calls never throw into your app and never block the
 calling thread.
 
@@ -42,9 +45,19 @@ Sent:
 - The signals you track: name (up to 200 characters), optional number, your properties and a UTC time. Properties may be
   strings, finite numbers and booleans (sent as `"true"` or `"false"`); other values are dropped.
 - A random session id that rotates after 30 minutes without a signal.
-- OS name and version, app version, locale, and the SDK name and version.
+- OS name and version, app version, device model (supplied by your host; otherwise PC on Windows, Desktop on Linux, the hardware model on macOS, and empty on Android and iOS),
+  locale, and the SDK name and version.
+- A hashed anonymous install id, see below.
 - An optional user id. `Pulse.SetUser("id")` hashes it with SHA-256 on the device; the raw id is never stored or sent.
-  The user id is not kept across restarts, so call `SetUser` again at startup.
+  It replaces the install id until you call `Pulse.SetUser(null)`. The user id is not kept across restarts, so call
+  `SetUser` again at startup.
+
+### Anonymous install id
+
+The SDK creates a random install id on first launch and keeps it in the app's own storage folder, next to the offline
+queue. It is random, not derived from any device identifier, not shared between apps, and deleted when the app and its
+data are removed. It is sent only as a SHA-256 hash. Turning opt-out on deletes it, and turning opt-out off creates a new
+one.
 
 Never sent: an advertising id, a device identifier, a cookie, a fingerprint, a machine name, a location, contacts, or
 automatic screen or gameplay events.
@@ -140,7 +153,7 @@ await Pulse.ShutdownAsync();   // before the process ends
 The offline queue folder must be stable, used by one app only, and used by one running process at a time. There is no
 default on Android and iOS and no fallback to the working directory, so pass your app's data folder as
 `StorageDirectory` there. On mobile, also pass `EnvironmentInfo` built from your framework's device API, for example
-`new DotNetEnvironmentInfo("Android", osVersion, appVersion, buildNumber, locale)`.
+`new DotNetEnvironmentInfo("Android", osVersion, appVersion, buildNumber, locale, deviceModel)`.
 
 ## Requirements
 
@@ -161,7 +174,7 @@ The runtime needs managed threads and a writable file system. Default queue fold
 ## Opt-out
 
 ```csharp
-Pulse.OptOut = true;   // stops collection, clears the queue, forgets the user id
+Pulse.OptOut = true;   // stops collection, clears the queue, forgets the user id and deletes the install id
 ```
 
 The choice is remembered across restarts and applies to every app that shares the same queue folder.
