@@ -12,6 +12,12 @@ namespace Mightys.Pulse
         public string StorageDirectory { get; set; }
         /// <summary>Environment snapshot. Defaults to <see cref="DotNetEnvironmentInfo"/>.</summary>
         public IEnvironmentInfo EnvironmentInfo { get; set; }
+        /// <summary>Extra system fields the host knows and the runtime cannot tell, such as screenWidth, screenHeight, screenScale,
+        /// colorScheme, orientation, fontScale, connectionType or deviceType on a phone. Read once; they win over detected values and are
+        /// ignored when you supply your own <see cref="EnvironmentInfo"/>. Only the documented system field names are sent.</summary>
+        public IDictionary<string, string> HostFields { get; set; }
+        /// <summary>Like <see cref="HostFields"/> for values that change. Called each time a signal is captured, so keep it cheap and never block.</summary>
+        public Func<IDictionary<string, string>> DynamicHostFields { get; set; }
         /// <summary>Receives diagnostic strings when <see cref="PulseOptions.Debug"/> is true. Do not block in it.</summary>
         public Action<string> Logger { get; set; }
     }
@@ -55,17 +61,20 @@ namespace Mightys.Pulse
         private readonly object storageGate = new object();
         internal readonly PulseRuntime Runtime;
         internal readonly InstallId InstallId;
+        internal UsageTracker Usage;
         private readonly IClock clock;
         private readonly IStorage testStorage;
         private readonly ITransport testTransport;
         private readonly Func<bool> debugDefault;
+        private readonly bool statistics;
         private PulsePlatformOptions platform = new PulsePlatformOptions();
         private HttpClientTransport ownedTransport;
         private bool initialized, stopping;
         private Task stop;
 
-        internal PulseHost(IClock clock = null, IStorage storage = null, ITransport transport = null, Func<bool> debugDefault = null)
+        internal PulseHost(IClock clock = null, IStorage storage = null, ITransport transport = null, Func<bool> debugDefault = null, bool usage = true)
         {
+            this.statistics = usage;
             this.clock = clock ?? new SystemClock(); testStorage = storage; testTransport = transport;
             this.debugDefault = debugDefault ?? (() => BuildMode.EntryIsDebugBuild());
             Runtime = new PulseRuntime(this.clock);
@@ -79,11 +88,12 @@ namespace Mightys.Pulse
         private PulseClient CreateClient(string key, PulseOptions options, bool? optOut)
         {
             var storage = Storage();
-            var environment = platform.EnvironmentInfo ?? new DotNetEnvironmentInfo();
+            var environment = platform.EnvironmentInfo ?? new DotNetEnvironmentInfo(platform.HostFields, platform.DynamicHostFields);
             var transport = testTransport ?? (ownedTransport = new HttpClientTransport());
             // Read or create the install id before the client's worker starts using storage.
-            if (optOut != true && !StoredOptOutSafe(storage)) InstallId.Prime();
-            var client = new PulseClient(key, options, clock, transport, storage, environment, Log, initialOptOut: optOut);
+            var usage = Usage = statistics ? new UsageTracker(Storage, installIsNew: InstallId.ConsumeCreated) : null;
+            if (optOut != true && !StoredOptOutSafe(storage)) { InstallId.Prime(); usage?.Prime(); }
+            var client = new PulseClient(key, options, clock, transport, storage, environment, Log, initialOptOut: optOut, usage: usage);
             initialized = true;
             return client;
         }
@@ -99,7 +109,8 @@ namespace Mightys.Pulse
                 {
                     if (initialized || stopping) return;
                     platform = new PulsePlatformOptions { StorageDirectory = requested?.StorageDirectory,
-                        EnvironmentInfo = requested?.EnvironmentInfo, Logger = requested?.Logger };
+                        EnvironmentInfo = requested?.EnvironmentInfo, Logger = requested?.Logger,
+                        HostFields = requested?.HostFields, DynamicHostFields = requested?.DynamicHostFields };
                     // The default for PulseOptions.Debug is decided here, once. An explicit option still wins.
                     PulseInfo.DebugBuild = debugDefault();
                     Runtime.Initialize(appKey, options);

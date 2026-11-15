@@ -39,12 +39,14 @@ namespace Mightys.Pulse.Tests
         internal readonly Dictionary<string, byte[]> Files = new Dictionary<string, byte[]>();
         internal int Appends, Replaces;
         internal bool Fail;
-        private void Check() { if (Fail) throw new IOException("Synthetic failure."); }
-        public byte[] Read(string name) { Check(); return Files.TryGetValue(name, out var bytes) ? bytes.ToArray() : null; }
+        // When set, only calls for this one file fail.
+        internal string FailOnly;
+        private void Check(string name) { if (Fail || (FailOnly != null && FailOnly == name)) throw new IOException("Synthetic failure."); }
+        public byte[] Read(string name) { Check(name); return Files.TryGetValue(name, out var bytes) ? bytes.ToArray() : null; }
         public void Append(string name, byte[] bytes)
-        { Check(); Appends++; Files[name] = Files.TryGetValue(name, out var old) ? old.Concat(bytes).ToArray() : bytes.ToArray(); }
-        public void Replace(string name, byte[] bytes) { Check(); Replaces++; Files[name] = bytes.ToArray(); }
-        public void Delete(string name) { Check(); Files.Remove(name); }
+        { Check(name); Appends++; Files[name] = Files.TryGetValue(name, out var old) ? old.Concat(bytes).ToArray() : bytes.ToArray(); }
+        public void Replace(string name, byte[] bytes) { Check(name); Replaces++; Files[name] = bytes.ToArray(); }
+        public void Delete(string name) { Check(name); Files.Remove(name); }
     }
 
     internal sealed class FakeEnvironment : IEnvironmentInfo

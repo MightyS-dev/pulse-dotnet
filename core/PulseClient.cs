@@ -25,6 +25,10 @@ namespace Mightys.Pulse
         private readonly IStorage storage;
         private readonly PulseOptions options;
         private readonly string appKey, system;
+        private readonly HashSet<string> systemKeys = new HashSet<string>(StringComparer.Ordinal);
+        private readonly IExtraSystemFields extras;
+        private readonly UsageTracker usage;
+        private readonly string appVersion, appBuild;
         private readonly Uri url;
         private readonly Action<string> logger;
         private readonly Func<double> random;
@@ -44,13 +48,15 @@ namespace Mightys.Pulse
 
         internal PulseClient(string appKey, PulseOptions options, IClock clock, ITransport transport,
             IStorage storage, IEnvironmentInfo environment, Action<string> logger = null,
-            bool runWorker = true, Func<double> random = null, bool? initialOptOut = null)
+            bool runWorker = true, Func<double> random = null, bool? initialOptOut = null, UsageTracker usage = null)
         {
             this.appKey = appKey; this.options = options.Snapshot(); this.clock = clock;
             this.options.Debug = options.Debug;
             this.transport = transport; this.storage = storage; this.logger = logger;
             this.random = random ?? new Random().NextDouble;
-            system = SignalJson.SystemJson(environment, this.options);
+            system = SignalJson.SystemJson(environment, this.options, systemKeys);
+            extras = environment as IExtraSystemFields; this.usage = usage;
+            appVersion = this.options.AppVersion ?? environment.AppVersion ?? ""; appBuild = environment.AppBuildNumber ?? "";
             url = new Uri(this.options.Host + "/api/v1/signals");
             QueueName = "queue-" + SignalJson.Hash(appKey) + ".bin";
             interval = this.options.FlushIntervalSeconds;
@@ -78,16 +84,30 @@ namespace Mightys.Pulse
         internal void Enqueue(SignalInput input)
         {
             if (input == null) return;
-            var json = SignalJson.Serialize(input, system, options.Debug);
+            // The platform callback runs outside the client lock; it must be cheap.
+            IReadOnlyDictionary<string, string> dynamicFields = null;
+            try { dynamicFields = extras?.DynamicFields(); } catch (Exception) { Warn("Platform fields unavailable."); }
             lock (gate)
             {
                 if (optOut || lifetime.IsCancellationRequested) return;
-                queue.Add(new QueueEntry { Id = Guid.NewGuid().ToString("N"), Json = json,
-                    Timestamp = input.Timestamp, Sequence = ++sequence });
+                var observation = usage?.Observe(input.SessionId, input.Timestamp, appVersion, appBuild);
+                var systemJson = observation == null && dynamicFields == null ? system :
+                    SignalJson.SystemJsonFor(system, systemKeys, dynamicFields, observation?.Fields);
+                if (observation != null)
+                    foreach (var auto in observation.Signals)
+                    {
+                        var own = new SignalInput { Type = auto.Type, PropsJson = auto.PropsJson ?? "{}", Timestamp = input.Timestamp,
+                            SessionId = input.SessionId, UserHash = input.UserHash };
+                        Add(own, SignalJson.Serialize(own, systemJson, options.Debug));
+                    }
+                Add(input, SignalJson.Serialize(input, systemJson, options.Debug));
                 Prune();
             }
             Pulse();
         }
+
+        private void Add(SignalInput input, string json) =>
+            queue.Add(new QueueEntry { Id = Guid.NewGuid().ToString("N"), Json = json, Timestamp = input.Timestamp, Sequence = ++sequence });
 
         internal void SetOptOut(bool value)
         {
@@ -96,6 +116,7 @@ namespace Mightys.Pulse
                 optOut = value; preferenceExplicit = true; preferenceDirty = true; preferenceVersion++;
                 if (value)
                 {
+                    try { usage?.Forget(); } catch (Exception) { }
                     queue.Clear();
                     try { activeRequest?.Cancel(); } catch (Exception) { }
                 }

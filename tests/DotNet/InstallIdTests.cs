@@ -55,7 +55,7 @@ namespace Mightys.Pulse.Tests
         public async Task OptOutDeletesInstallIdAndOptOutOffCreatesDifferentOne()
         {
             var storage = new MemoryStorage(); var transport = new FakeTransport();
-            var host = new PulseHost(storage: storage, transport: transport);
+            var host = new PulseHost(storage: storage, transport: transport, usage: false);
             host.Initialize("synthetic", new PulseOptions(), Platform());
             try
             {
@@ -104,7 +104,7 @@ namespace Mightys.Pulse.Tests
         public async Task SignalTrackedBeforeInitializeCarriesInstallIdHash()
         {
             var storage = new MemoryStorage(); var transport = new FakeTransport();
-            var host = new PulseHost(storage: storage, transport: transport);
+            var host = new PulseHost(storage: storage, transport: transport, usage: false);
             host.Runtime.Track("early");
             host.Initialize("synthetic", new PulseOptions(), Platform());
             try
@@ -123,14 +123,14 @@ namespace Mightys.Pulse.Tests
             try
             {
                 string id;
-                var one = new PulseHost(transport: new FakeTransport());
+                var one = new PulseHost(transport: new FakeTransport(), usage: false);
                 one.Initialize("synthetic", new PulseOptions(), new PulsePlatformOptions { StorageDirectory = directory, EnvironmentInfo = Env() });
                 try { one.Runtime.Track("a"); await one.InstallId.Idle.WaitAsync(Limit); }
                 finally { await one.ShutdownAsync(); }
                 var bytes = File.ReadAllBytes(Path.Combine(directory, "install-id"));
                 id = Encoding.ASCII.GetString(bytes);
                 Assert.Matches("^[0-9a-f]{32}$", id);
-                var two = new PulseHost(transport: new FakeTransport());
+                var two = new PulseHost(transport: new FakeTransport(), usage: false);
                 two.Initialize("synthetic", new PulseOptions(), new PulsePlatformOptions { StorageDirectory = directory, EnvironmentInfo = Env() });
                 try { two.Runtime.Track("b"); await two.InstallId.Idle.WaitAsync(Limit); }
                 finally { await two.ShutdownAsync(); }
@@ -143,7 +143,7 @@ namespace Mightys.Pulse.Tests
         public async Task FirstSignalAfterInitializeCarriesFullSystemValues()
         {
             var transport = new FakeTransport();
-            var host = new PulseHost(storage: new MemoryStorage(), transport: transport);
+            var host = new PulseHost(storage: new MemoryStorage(), transport: transport, usage: false);
             host.Initialize("synthetic", new PulseOptions());
             try
             {
@@ -176,7 +176,7 @@ namespace Mightys.Pulse.Tests
 
         private static async Task<System.Text.Json.JsonElement[]> Run(IStorage storage, Action<PulseHost> act)
         {
-            var transport = new FakeTransport(); var host = new PulseHost(storage: storage, transport: transport);
+            var transport = new FakeTransport(); var host = new PulseHost(storage: storage, transport: transport, usage: false);
             host.Initialize("synthetic", new PulseOptions(), Platform());
             try
             {

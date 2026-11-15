@@ -57,9 +57,12 @@ namespace Mightys.Pulse.Tests
                 using var fixture = JsonDocument.Parse(File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Fixtures/v1.jsonc")),
                     new JsonDocumentOptions { CommentHandling = JsonCommentHandling.Skip });
                 Assert.Equal(Names(fixture.RootElement[0]), Names(actual));
-                Assert.Equal(Names(fixture.RootElement[0].GetProperty("system")), Names(actual.GetProperty("system")));
+                // Every fixture field is present; anything extra is an optional system field from the fixed list.
+                var extra = Names(actual.GetProperty("system")).Except(Names(fixture.RootElement[0].GetProperty("system"))).ToArray();
+                Assert.Empty(Names(fixture.RootElement[0].GetProperty("system")).Except(Names(actual.GetProperty("system"))));
+                Assert.All(extra, key => Assert.True(key == "bundleId" || key == "signingCertSha256", key));
                 Assert.Equal("pulse-dotnet", actual.GetProperty("system").GetProperty("sdkName").GetString());
-                Assert.Equal("0.9.2", actual.GetProperty("system").GetProperty("sdkVersion").GetString());
+                Assert.Equal("0.9.3", actual.GetProperty("system").GetProperty("sdkVersion").GetString());
                 Assert.EndsWith("Z", actual.GetProperty("timestamp").GetString());
                 Assert.Equal(4.5, actual.GetProperty("value").GetDouble());
                 Assert.DoesNotContain("synthetic-person", actual.GetRawText());
@@ -183,6 +186,43 @@ namespace Mightys.Pulse.Tests
             Assert.Equal(0, (await transport.SendAsync(request, cancellation.Token).WaitAsync(TimeSpan.FromSeconds(5))).StatusCode);
             using var broken = new HttpClientTransport(new StubHandler((_, __) => throw new HttpRequestException()));
             Assert.Equal(0, (await broken.SendAsync(request, CancellationToken.None)).StatusCode);
+        }
+
+        [Fact]
+        public async Task HungTransportIsBoundedByRequestTimeoutKeepsQueueRetriesAndDeliversOnRecovery()
+        {
+            var calls = 0; var hungSince = DateTimeOffset.MinValue; var recoveredAt = DateTimeOffset.MinValue;
+            using var transport = new HttpClientTransport(new StubHandler(async (_, token) =>
+            {
+                if (Interlocked.Increment(ref calls) == 1)
+                {
+                    hungSince = DateTimeOffset.UtcNow;
+                    await Task.Delay(Timeout.Infinite, token);   // the request never completes by itself
+                }
+                recoveredAt = DateTimeOffset.UtcNow;
+                return new HttpResponseMessage(HttpStatusCode.Accepted);
+            }));
+            var storage = new MemoryStorage();
+            var host = new PulseHost(storage: storage, transport: transport, usage: false);
+            host.Initialize("synthetic", new PulseOptions(), new PulsePlatformOptions
+            { EnvironmentInfo = new DotNetEnvironmentInfo("Windows", "11", "1.2.3", "42", "en-US") });
+            try
+            {
+                var timer = System.Diagnostics.Stopwatch.StartNew();
+                host.Runtime.Track("hung"); var flush = host.Runtime.Flush();
+                Assert.True(timer.Elapsed < TimeSpan.FromMilliseconds(500), "Track and Flush must not block the caller");
+                for (var i = 0; i < 500 && Volatile.Read(ref calls) == 0; i++) await Task.Delay(10);
+                Assert.Equal(1, Volatile.Read(ref calls));
+                await Task.Delay(300);
+                var queue = storage.Files.Single(f => f.Key.EndsWith(".bin", StringComparison.Ordinal)).Value;
+                Assert.Single(QueueJournal.Decode(queue, 1000));       // still in the persisted queue while the request hangs
+                Assert.False(flush.IsCompleted);
+                await flush.WaitAsync(TimeSpan.FromSeconds(40));       // timeout (10 s), backoff (about 1 s), then recovery
+                Assert.Equal(2, Volatile.Read(ref calls));
+                var hung = recoveredAt - hungSince;
+                Assert.InRange(hung.TotalSeconds, 10.5, 30);           // bounded by the request timeout, then retried after a backoff
+            }
+            finally { await host.ShutdownAsync(); }
         }
 
         [Fact]

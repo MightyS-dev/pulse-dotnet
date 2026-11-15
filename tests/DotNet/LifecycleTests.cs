@@ -16,7 +16,7 @@ namespace Mightys.Pulse.Tests
         public async Task ShutdownReturnsWithinBudgetWhenStorageIsBlockedAndSaveCanFinishLater()
         {
             using var storage = new BlockingStorage();
-            var host = new PulseHost(storage: storage, transport: new FakeTransport());
+            var host = new PulseHost(storage: storage, transport: new FakeTransport(), usage: false);
             host.Initialize("synthetic", new PulseOptions(), Platform());
             await host.Runtime.Flush().WaitAsync(TimeSpan.FromSeconds(10));
             storage.Block = true; host.Runtime.Track("save-later");
@@ -38,7 +38,7 @@ namespace Mightys.Pulse.Tests
         [Fact]
         public async Task PauseAndFocusLossDrainWithoutWaitingForNormalInterval()
         {
-            var transport = new FakeTransport(); var host = new PulseHost(storage: new MemoryStorage(), transport: transport);
+            var transport = new FakeTransport(); var host = new PulseHost(storage: new MemoryStorage(), transport: transport, usage: false);
             host.Initialize("synthetic", new PulseOptions { FlushIntervalSeconds = 3600 }, Platform());
             try
             {
@@ -57,7 +57,7 @@ namespace Mightys.Pulse.Tests
             var entered = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
             var pending = new TaskCompletionSource<TransportResponse>(TaskCreationOptions.RunContinuationsAsynchronously);
             var transport = new FakeTransport { Handler = (_, __) => { entered.TrySetResult(true); return pending.Task; } };
-            var storage = new MemoryStorage(); var host = new PulseHost(storage: storage, transport: transport);
+            var storage = new MemoryStorage(); var host = new PulseHost(storage: storage, transport: transport, usage: false);
             host.Initialize("synthetic", new PulseOptions(), Platform()); host.Runtime.Track("durable");
             var first = host.PauseAsync(); await entered.Task.WaitAsync(TimeSpan.FromSeconds(10));
             for (var i = 0; i < 1000; i++) Assert.Same(first, host.FocusChangedAsync(false));
@@ -76,7 +76,7 @@ namespace Mightys.Pulse.Tests
             try
             {
                 var firstTransport = new FakeTransport(); firstTransport.Reply(500);
-                var first = new PulseHost(transport: firstTransport);
+                var first = new PulseHost(transport: firstTransport, usage: false);
                 first.Initialize("synthetic", new PulseOptions { FlushIntervalSeconds = 3600 }, Platform(directory));
                 first.Runtime.SetUser("raw-synthetic-user"); first.Runtime.Track("saved", props: new Dictionary<string, object> { ["x"] = new string('a', 2000) });
                 using var cancellation = new CancellationTokenSource();
@@ -90,7 +90,7 @@ namespace Mightys.Pulse.Tests
                 Assert.All(Directory.GetFiles(directory), f => Assert.DoesNotContain("raw-synthetic-user", Encoding.UTF8.GetString(File.ReadAllBytes(f))));
                 // This test uses SystemClock for capture. Advance a real-time snapshot past the saved retry deadline.
                 var secondTransport = new FakeTransport();
-                var second = new PulseHost(new OffsetClock(TimeSpan.FromSeconds(10)), transport: secondTransport);
+                var second = new PulseHost(new OffsetClock(TimeSpan.FromSeconds(10)), transport: secondTransport, usage: false);
                 second.Initialize("synthetic", new PulseOptions(), Platform(directory));
                 try
                 {
@@ -111,11 +111,11 @@ namespace Mightys.Pulse.Tests
             try
             {
                 new FileStorage(directory).Replace("opt-out", new byte[] { 1 });
-                var transport = new FakeTransport(); var first = new PulseHost(transport: transport);
+                var transport = new FakeTransport(); var first = new PulseHost(transport: transport, usage: false);
                 first.Initialize("synthetic", new PulseOptions(), Platform(directory));
                 Assert.True(first.Runtime.OptOut); first.Runtime.Track("forbidden");
                 await first.PauseAsync(); await first.ShutdownAsync(); Assert.Empty(transport.Requests);
-                var second = new PulseHost(transport: transport);
+                var second = new PulseHost(transport: transport, usage: false);
                 second.Initialize("synthetic", new PulseOptions(), Platform(directory));
                 try
                 {
@@ -133,7 +133,7 @@ namespace Mightys.Pulse.Tests
         public async Task PreInitializeQueueIdentitySessionsAndConcurrentTrackingUseSharedRuntime()
         {
             var clock = new FakeClock(); var transport = new FakeTransport();
-            var host = new PulseHost(clock, new MemoryStorage(), transport);
+            var host = new PulseHost(clock, new MemoryStorage(), transport, usage: false);
             host.Runtime.SetUser("early-user"); for (var i = 0; i < 110; i++) host.Runtime.Track("early", i);
             host.Runtime.SetUser(null);
             host.Initialize("synthetic", new PulseOptions { MaxQueueSize = 20000, MaxBatchSize = 1000 }, Platform());
@@ -161,7 +161,7 @@ namespace Mightys.Pulse.Tests
         [Fact]
         public async Task InvalidInitializeCanBeCorrectedAndOptionsAreCopied()
         {
-            var transport = new FakeTransport(); var host = new PulseHost(storage: new MemoryStorage(), transport: transport);
+            var transport = new FakeTransport(); var host = new PulseHost(storage: new MemoryStorage(), transport: transport, usage: false);
             host.Initialize(null, null); host.Initialize("synthetic", new PulseOptions { Host = "invalid" });
             var platform = Platform(); var options = new PulseOptions { AppVersion = "original" };
             host.Initialize("synthetic", options, platform); options.AppVersion = "mutated"; platform.EnvironmentInfo = null;

@@ -15,7 +15,7 @@ namespace Mightys.Pulse
         private readonly object gate = new object();
         private readonly Func<IStorage> storage;
         private string id;
-        private bool resolved;
+        private bool resolved, createdNow;
         private Task idle = Task.CompletedTask;
 
         internal InstallId(Func<IStorage> storage) { this.storage = storage; }
@@ -39,12 +39,22 @@ namespace Mightys.Pulse
             }
         }
 
+        /// <summary>True once when this process created the id (nothing was stored before), then false until a new id is created.</summary>
+        internal bool ConsumeCreated()
+        {
+            lock (gate)
+            {
+                if (id == null) id = Resolve(false);
+                var result = createdNow; createdNow = false; return result;
+            }
+        }
+
         /// <summary>Opt-out: forgets the id and deletes it. The next signal after opt-out is turned off gets a new one.</summary>
         internal void Forget()
         {
             lock (gate)
             {
-                id = null; resolved = true; // nothing to read back; the next Hash creates a new id
+                id = null; resolved = true; createdNow = false; // nothing to read back; the next Hash creates a new id
                 Chain(() => { try { storage().Delete(FileName); } catch (Exception) { } });
             }
         }
@@ -57,7 +67,7 @@ namespace Mightys.Pulse
                 try { var stored = Parse(storage().Read(FileName)); if (stored != null) return stored; }
                 catch (Exception) { }
             }
-            var created = Create();
+            var created = Create(); createdNow = true;
             if (writeNow) Write(created);
             else Chain(() => { lock (gate) { if (id != created) return; } Write(created); });
             return created;

@@ -4,6 +4,20 @@ All notable changes to this package are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the package follows
 [Semantic Versioning](https://semver.org/).
 
+## [0.9.3] - 2026-11-15
+
+### Added
+
+- Every signal now carries more context, with no setup: device type, architecture, .NET runtime version, app name, whether
+  the app is a debug build, language, preferred language, region, text direction, time zone and UTC offset.
+- Usage statistics on every signal: first session date, number of sessions, distinct days used (all time and last 30
+  days), previous and average session length, seconds since the session started, and a flag during the first session
+  after install. They are kept in one small file next to the install id and deleted on opt-out.
+- Three automatic signals: `pulse.session_started` (once per session), `pulse.new_install` and `pulse.app_updated`
+  (with `previousVersion` and `previousBuild`).
+- `PulsePlatformOptions.HostFields` and `DynamicHostFields` let a MAUI, WPF or Avalonia app add values only it knows,
+  such as screen size or colour scheme.
+
 ## [0.9.2] - 2026-11-15
 
 ### Changed

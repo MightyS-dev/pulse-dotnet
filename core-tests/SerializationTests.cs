@@ -24,7 +24,9 @@ namespace Mightys.Pulse.Tests
                 new JsonDocumentOptions { CommentHandling = JsonCommentHandling.Skip });
             var actual = Harness.Event(request); var expected = fixture.RootElement[0];
             Assert.Equal(Names(expected), Names(actual));
-            Assert.Equal(Names(expected.GetProperty("system")), Names(actual.GetProperty("system")));
+            // Every fixture field is present; the only extra here is the bundle id, which is sent by default when the platform has one.
+            Assert.Empty(Names(expected.GetProperty("system")).Except(Names(actual.GetProperty("system"))));
+            Assert.Equal(new[] { "bundleId" }, Names(actual.GetProperty("system")).Except(Names(expected.GetProperty("system"))).ToArray());
             foreach (var key in Names(expected.GetProperty("system")))
                 Assert.Equal(JsonValueKind.String, actual.GetProperty("system").GetProperty(key).ValueKind);
             Assert.Equal(Names(expected.GetProperty("props")), Names(actual.GetProperty("props")));
@@ -124,11 +126,12 @@ namespace Mightys.Pulse.Tests
         }
 
         [Fact]
-        public async Task IdentityIsOffByDefaultAndAppVersionCanBeOverridden()
+        public async Task BundleIdIsSentByDefaultSigningDigestIsOptInAndAppVersionCanBeOverridden()
         {
             var h = new Harness(new PulseOptions { AppVersion = "custom" }); await h.Send();
             var system = Harness.Event(Assert.Single(h.Transport.Requests)).GetProperty("system");
-            Assert.False(system.TryGetProperty("bundleId", out _)); Assert.False(system.TryGetProperty("signingCertSha256", out _));
+            Assert.Equal("dev.example.synthetic", system.GetProperty("bundleId").GetString());
+            Assert.False(system.TryGetProperty("signingCertSha256", out _));
             Assert.Equal("custom", system.GetProperty("appVersion").GetString());
             var enabled = new Harness(new PulseOptions { SendAppIdentity = true }); await enabled.Send();
             system = Harness.Event(Assert.Single(enabled.Transport.Requests)).GetProperty("system");

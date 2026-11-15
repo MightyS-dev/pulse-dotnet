@@ -17,7 +17,7 @@ dotnet add package Mightys.Pulse
 or in a project file:
 
 ```xml
-<PackageReference Include="Mightys.Pulse" Version="0.9.2" />
+<PackageReference Include="Mightys.Pulse" Version="0.9.3" />
 ```
 
 ## Quick start
@@ -45,12 +45,54 @@ Sent:
 - The signals you track: name (up to 200 characters), optional number, your properties and a UTC time. Properties may be
   strings, finite numbers and booleans (sent as `"true"` or `"false"`); other values are dropped.
 - A random session id that rotates after 30 minutes without a signal.
-- OS name and version, app version, device model (supplied by your host; otherwise PC on Windows, Desktop on Linux, the hardware model on macOS, and empty on Android and iOS),
-  locale, and the SDK name and version.
+- Device and app context, grouped below. A value the platform cannot give is left out, never guessed.
 - A hashed anonymous install id, see below.
 - An optional user id. `Pulse.SetUser("id")` hashes it with SHA-256 on the device; the raw id is never stored or sent.
   It replaces the install id until you call `Pulse.SetUser(null)`. The user id is not kept across restarts, so call
   `SetUser` again at startup.
+
+### Device, app, settings and usage fields
+
+Every signal carries these, read by the SDK with no setup and no permission:
+
+| Group | Fields |
+| --- | --- |
+| Device | `platform`, `osName`, `osVersion`, `deviceModel` (yours if you pass one to `DotNetEnvironmentInfo`; otherwise PC on Windows, Desktop on Linux, the hardware model on macOS, empty on Android and iOS), `deviceType` (`desktop` on Windows, macOS and Linux), `architecture` (`x86_64`, `arm64`, `armv7`, `x86`), `runtimeVersion` (for example `.NET 9.0.7`) |
+| App and install | `appName` (the entry assembly's product name), `appVersion`, `appBuildNumber` (only when you pass one), `isDebugBuild`, `sdkName`, `sdkVersion` |
+| Language and time | `locale`, `language`, `preferredLanguage`, `region`, `layoutDirection`, `timeZone` (IANA id), `utcOffsetMinutes` |
+| Usage statistics | `firstSessionDate`, `totalSessionsCount`, `distinctDaysUsed`, `distinctDaysUsedLastMonth`, `previousSessionSeconds`, `averageSessionSeconds`, `sessionSeconds`, `isNewInstall` (first session only) |
+
+Values that only your app knows can be added without any other code change. Pass them in `PulsePlatformOptions`:
+`HostFields` for fixed values (read once) and `DynamicHostFields` for values that change (read each time a signal is
+captured, so keep it cheap):
+
+```csharp
+Pulse.Initialize("YOUR_APP_KEY", null, new PulsePlatformOptions
+{
+    HostFields = new Dictionary<string, string> { ["screenWidth"] = "1440", ["screenHeight"] = "900", ["screenScale"] = "2" },
+    DynamicHostFields = () => new Dictionary<string, string> { ["colorScheme"] = IsDark() ? "dark" : "light" }
+});
+```
+
+Accepted keys: `deviceType` (`phone`, `tablet`, `desktop`, `tv`, `watch`, `vision`, `car`, `web`), `deviceBrand`, `osApiLevel`,
+`installSource`, `isSimulator`, `screenWidth`, `screenHeight`, `screenScale`, `screenWidthPx`, `screenHeightPx`, `screenDpi`,
+`screenCount`, `orientation`, `colorScheme`, `fontScale`, `reduceMotion`, `boldText`, `invertColors`, `increaseContrast`,
+`reduceTransparency`, `differentiateWithoutColor`, `connectionType`, `lowPowerMode` and the detected keys above (your value
+wins). Values are strings, at most 64 characters, and must match the key's format; other keys and bad values are dropped.
+On Android and iOS `deviceType` is only sent when you pass it. The SDK does not read the screen, the network or the
+battery itself.
+
+The usage statistics are kept in one small file named `usage` next to the install id and the queue. It holds the first
+session date, the session count, recent distinct days and the durations of completed sessions of the last 90 days. Turning
+opt-out on deletes it together with the install id. If it cannot be written, the numbers live in memory for that run.
+
+### Automatic signals
+
+The SDK sends three signals by itself, so you can count installs, updates and sessions without any code:
+`pulse.session_started` (once per session, that is on the first signal of the run and after 30 minutes without one),
+`pulse.new_install` (once, in the first session after install) and `pulse.app_updated` (once per release, with the
+properties `previousVersion` and `previousBuild`). They follow opt-out and the `Debug` flag like any other signal, and
+they are rare by design.
 
 ### Anonymous install id
 

@@ -19,6 +19,7 @@
     <Compile Include="$(PulseCoreTestsDir)/DeliveryTests.cs" Link="Shared/DeliveryTests.cs" />
     <Compile Include="$(PulseCoreTestsDir)/StorageAndPrivacyTests.cs" Link="Shared/StorageAndPrivacyTests.cs" />
     <Compile Include="$(PulseCoreTestsDir)/RegressionTests.cs" Link="Shared/RegressionTests.cs" />
+    <Compile Include="$(PulseCoreTestsDir)/UsageTests.cs" Link="Shared/UsageTests.cs" />
     <Compile Include="$(PulseCoreTestsDir)/DeliveryEdgeCaseTests.cs" Link="Shared/DeliveryEdgeCaseTests.cs" />
     <None Include="$(PulseFixturesDir)/v1.jsonc" Link="Fixtures/v1.jsonc" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>

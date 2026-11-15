@@ -77,7 +77,7 @@ namespace Mightys.Pulse.Tests
         private static async Task<bool> SentDebugFlag(Func<bool> detect, PulseOptions options)
         {
             var transport = new FakeTransport();
-            var host = new PulseHost(storage: new MemoryStorage(), transport: transport, debugDefault: detect);
+            var host = new PulseHost(storage: new MemoryStorage(), transport: transport, debugDefault: detect, usage: false);
             host.Initialize("synthetic", options, new PulsePlatformOptions
             { EnvironmentInfo = new DotNetEnvironmentInfo("Windows", "11", "1.2.3", "42", "en-US") });
             try
@@ -112,7 +112,7 @@ namespace Mightys.Pulse.Tests
         {
             var calls = 0;
             var transport = new FakeTransport();
-            var host = new PulseHost(storage: new MemoryStorage(), transport: transport, debugDefault: () => { calls++; return calls == 1; });
+            var host = new PulseHost(storage: new MemoryStorage(), transport: transport, debugDefault: () => { calls++; return calls == 1; }, usage: false);
             var platform = new PulsePlatformOptions { EnvironmentInfo = new DotNetEnvironmentInfo("Windows", "11", "1", "1", "en-US") };
             host.Initialize("synthetic", new PulseOptions(), platform);
             host.Initialize("synthetic", new PulseOptions(), platform);
