@@ -1,0 +1,75 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFrameworks>netstandard2.0;net8.0</TargetFrameworks>
+    <PackageId>Mightys.Pulse</PackageId>
+    <Version>0.9.0</Version>
+    <Title>MightyS Pulse</Title>
+    <Authors>MightyS Team</Authors>
+    <Copyright>Copyright (c) MightyS Team 2026</Copyright>
+    <Description>Privacy-first analytics for apps and games. No device IDs, offline queue, tiny. Send named signals with an optional number and a few properties from any .NET app or game, and see them in your MightyS Pulse dashboard. A user id is optional and hashed on the device, and signals are queued on disk while offline. Targets netstandard2.0 and net8.0, no package dependencies.</Description>
+    <PackageProjectUrl>https://pulse.mightys.dev</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/MightyS-dev/pulse-dotnet</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PublishRepositoryUrl>true</PublishRepositoryUrl>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageIcon>icon.png</PackageIcon>
+    <PackageReleaseNotes>Initial public release: named signals with an optional number and properties, optional hashed user id, persistent opt-out, batched delivery with an offline queue on disk and retries with backoff.</PackageReleaseNotes>
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+    <EmbedUntrackedSources>true</EmbedUntrackedSources>
+    <PackageTags>analytics privacy telemetry events app-analytics game-analytics offline maui wpf winforms avalonia godot csharp dotnet</PackageTags>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <SharedCore>$(PulseCoreDir)</SharedCore>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="$(SharedCore)/*.cs" Exclude="$(SharedCore)/Contracts.cs;$(SharedCore)/Pulse.cs" Link="Core/%(Filename)%(Extension)" />
+    <None Include="../../README.md" Pack="true" PackagePath="/" />
+    <None Include="../../LICENSE.md" Pack="true" PackagePath="/" />
+    <None Include="../../assets/icon.png" Pack="true" PackagePath="/" />
+    <InternalsVisibleTo Include="Mightys.Pulse.DotNet.Tests" />
+  </ItemGroup>
+  <!-- Adapt only identity and the facade boundary of the shared core. Runtime logic is unchanged.
+       Done in an inline task: MSBuild item and property strings rewrite backslashes to slashes on Unix,
+       which corrupted char literals such as '\r' when the text went through WriteLinesToFile.
+       Fails if the facade boundary moves. -->
+  <UsingTask TaskName="AdaptSharedCore" TaskFactory="RoslynCodeTaskFactory" AssemblyFile="$(MSBuildToolsPath)/Microsoft.Build.Tasks.Core.dll">
+    <ParameterGroup>
+      <SharedCore ParameterType="System.String" Required="true" />
+      <SdkVersion ParameterType="System.String" Required="true" />
+      <OutputDirectory ParameterType="System.String" Required="true" />
+    </ParameterGroup>
+    <Task>
+      <Using Namespace="System.IO" />
+      <Using Namespace="System.Text.RegularExpressions" />
+      <Code Type="Fragment" Language="cs"><![CDATA[
+        // Set this package's SDK name and version in the shared core copy.
+        var contracts = File.ReadAllText(Path.Combine(SharedCore, "Contracts.cs"));
+        contracts = Regex.Replace(contracts, "(public const string SdkName = \")[^\"]*(\";)", "${1}pulse-dotnet${2}");
+        if (!contracts.Contains("SdkName = \"pulse-dotnet\"")) { Log.LogError("Shared SDK name constant not found; check the .NET core adaptation."); return false; }
+        var versioned = Regex.Replace(contracts, "(public const string Version = \")[^\"]*(\";)", "${1}" + SdkVersion + "${2}");
+        if (!versioned.Contains("Version = \"" + SdkVersion + "\"")) { Log.LogError("Shared version constant not found; check the .NET core adaptation."); return false; }
+        contracts = versioned;
+        var pulse = File.ReadAllText(Path.Combine(SharedCore, "Pulse.cs"));
+        var runtime = Regex.Replace(pulse, @"(?s)    public static class Pulse\s*\{.*?(?=    // The facade)", "");
+        if (runtime.Contains("public static class Pulse"))
+        {
+            Log.LogError("Shared facade boundary changed; check the .NET core adaptation.");
+            return false;
+        }
+        Directory.CreateDirectory(OutputDirectory);
+        foreach (var pair in new[] { ("Contracts.g.cs", contracts), ("PulseRuntime.g.cs", runtime) })
+        {
+            var path = Path.Combine(OutputDirectory, pair.Item1);
+            if (!File.Exists(path) || File.ReadAllText(path) != pair.Item2) File.WriteAllText(path, pair.Item2);
+        }
+      ]]></Code>
+    </Task>
+  </UsingTask>
+  <Target Name="GenerateSharedCore" BeforeTargets="CoreCompile">
+    <AdaptSharedCore SharedCore="$(SharedCore)" SdkVersion="$(Version)" OutputDirectory="$(IntermediateOutputPath)" />
+    <ItemGroup>
+      <Compile Include="$(IntermediateOutputPath)Contracts.g.cs;$(IntermediateOutputPath)PulseRuntime.g.cs" />
+    </ItemGroup>
+  </Target>
+</Project>

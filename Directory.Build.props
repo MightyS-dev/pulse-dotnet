@@ -1,0 +1,17 @@
+<Project>
+  <PropertyGroup>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <AnalysisLevel>latest</AnalysisLevel>
+    <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
+    <PulseCoreDir>$(MSBuildThisFileDirectory)core</PulseCoreDir>
+    <PulseCoreTestsDir>$(MSBuildThisFileDirectory)core-tests</PulseCoreTestsDir>
+    <PulseFixturesDir>$(MSBuildThisFileDirectory)core-tests/Fixtures</PulseFixturesDir>
+    <LangVersion>9.0</LangVersion>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <UseSharedCompilation>false</UseSharedCompilation>
+    <RestorePackagesPath>$(MSBuildThisFileDirectory).build/packages</RestorePackagesPath>
+    <RestoreFallbackFolders Condition="Exists('$(UserProfile)/.nuget/packages')">$(UserProfile)/.nuget/packages</RestoreFallbackFolders>
+    <RestoreFallbackFolders Condition="Exists('$(HOME)/.nuget/packages')">$(RestoreFallbackFolders);$(HOME)/.nuget/packages</RestoreFallbackFolders>
+  </PropertyGroup>
+</Project>

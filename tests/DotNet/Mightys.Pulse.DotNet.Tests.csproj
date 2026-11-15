@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+    <DefineConstants Condition="'$(PulseTestNetStandard)' == 'true'">$(DefineConstants);PULSE_TEST_NETSTANDARD</DefineConstants>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.11.0" />
+    <PackageReference Include="xunit" Version="2.9.3" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="3.1.4" PrivateAssets="all" />
+    <ProjectReference Include="../../src/Mightys.Pulse/Mightys.Pulse.csproj" ReferenceOutputAssembly="true" Condition="'$(PulseTestNetStandard)' != 'true'" />
+    <ProjectReference Include="../../src/Mightys.Pulse/Mightys.Pulse.csproj" ReferenceOutputAssembly="false" Condition="'$(PulseTestNetStandard)' == 'true'" />
+    <Reference Include="Mightys.Pulse" Condition="'$(PulseTestNetStandard)' == 'true'">
+      <HintPath>../../src/Mightys.Pulse/bin/$(Configuration)/netstandard2.0/Mightys.Pulse.dll</HintPath>
+    </Reference>
+    <Compile Include="$(PulseCoreTestsDir)/TestSupport.cs" Link="Shared/TestSupport.cs" />
+    <Compile Include="$(PulseCoreTestsDir)/AdviceTests.cs" Link="Shared/AdviceTests.cs" />
+    <Compile Include="$(PulseCoreTestsDir)/DeliveryTests.cs" Link="Shared/DeliveryTests.cs" />
+    <Compile Include="$(PulseCoreTestsDir)/StorageAndPrivacyTests.cs" Link="Shared/StorageAndPrivacyTests.cs" />
+    <Compile Include="$(PulseCoreTestsDir)/RegressionTests.cs" Link="Shared/RegressionTests.cs" />
+    <Compile Include="$(PulseCoreTestsDir)/DeliveryEdgeCaseTests.cs" Link="Shared/DeliveryEdgeCaseTests.cs" />
+    <None Include="$(PulseFixturesDir)/v1.jsonc" Link="Fixtures/v1.jsonc" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+</Project>

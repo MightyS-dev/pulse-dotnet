@@ -1,0 +1,6 @@
+<Solution>
+  <Project Path="src/Mightys.Pulse/Mightys.Pulse.csproj" />
+  <Project Path="tests/SharedCore/Mightys.Pulse.SharedCore.Tests.csproj" />
+  <Project Path="tests/DotNet/Mightys.Pulse.DotNet.Tests.csproj" />
+  <Project Path="samples/Quickstart/Quickstart.csproj" />
+</Solution>
