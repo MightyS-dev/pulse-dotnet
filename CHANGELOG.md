@@ -4,6 +4,13 @@ All notable changes to this package are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the package follows
 [Semantic Versioning](https://semver.org/).
 
+## [0.9.6] - 2026-11-16
+
+### Fixed
+
+- A signal that is dropped because its name or value is not valid no longer starts a session or keeps one alive.
+- Flush returns at once when nothing is waiting to be sent, even if the device storage cannot be read or written.
+
 ## [0.9.5] - 2026-11-16
 
 ### Fixed

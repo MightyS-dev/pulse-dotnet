@@ -17,7 +17,7 @@ dotnet add package Mightys.Pulse
 or in a project file:
 
 ```xml
-<PackageReference Include="Mightys.Pulse" Version="0.9.5" />
+<PackageReference Include="Mightys.Pulse" Version="0.9.6" />
 ```
 
 ## Quick start

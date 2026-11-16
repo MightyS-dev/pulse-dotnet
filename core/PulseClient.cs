@@ -412,7 +412,17 @@ namespace Mightys.Pulse
                     }
                 }
             }
-            catch (Exception) { lock (gate) storageRetryUntil = clock.UtcNow.AddSeconds(1); Warn("Queue operation failed; retained data will be retried."); }
+            catch (Exception)
+            {
+                lock (gate)
+                {
+                    storageRetryUntil = clock.UtcNow.AddSeconds(1);
+                    // With unusable storage, a Flush that has nothing in memory to deliver must not wait for the disk.
+                    for (var i = waiters.Count - 1; i >= 0; i--)
+                        if (!queue.Any(e => e.Sequence <= waiters[i].Sequence)) { waiters[i].Completion.TrySetResult(true); waiters.RemoveAt(i); }
+                }
+                Warn("Queue operation failed; retained data will be retried.");
+            }
             finally { processing.Release(); }
         }
 

@@ -109,10 +109,11 @@ namespace Mightys.Pulse
                 {
                     if (OptOut) return;
                     var now = clock.UtcNow;
-                    if (now - lastActivity >= TimeSpan.FromMinutes(30)) session = Guid.NewGuid().ToString("N");
-                    lastActivity = now;
-                    var input = SignalJson.Create(type, value, props, now, session, userHash ?? AnonymousHash(), Warn);
+                    // A signal that is dropped as invalid neither starts a session nor keeps the current one alive.
+                    var candidate = now - lastActivity >= TimeSpan.FromMinutes(30) ? Guid.NewGuid().ToString("N") : session;
+                    var input = SignalJson.Create(type, value, props, now, candidate, userHash ?? AnonymousHash(), Warn);
                     if (input == null) return;
+                    session = candidate; lastActivity = now;
                     input.Anonymous = userHash == null;
                     if (client != null) client.Enqueue(input);
                     else { if (beforeInitialize.Count == 100) beforeInitialize.Dequeue(); beforeInitialize.Enqueue(input); }
