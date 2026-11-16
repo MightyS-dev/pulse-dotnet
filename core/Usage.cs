@@ -73,7 +73,7 @@ namespace Mightys.Pulse
         }
 
         /// <summary>Records one signal of a session and returns the automatic signals that are due and the statistic fields to attach.</summary>
-        internal UsageObservation Observe(string sessionId, DateTimeOffset timestamp, string appVersion, string appBuild)
+        internal UsageObservation Observe(string sessionId, DateTimeOffset timestamp, string appVersion, string appBuild, bool emitsUpdate = true)
         {
             var result = new UsageObservation();
             lock (gate)
@@ -102,10 +102,15 @@ namespace Mightys.Pulse
                         updateChecked = true;
                         var changed = !firstEver && !fresh && !readFailed && lastVersion != null &&
                             ((appVersion ?? "") != lastVersion || (appBuild ?? "") != (lastBuild ?? ""));
-                        if (changed && ((appVersion ?? "").Length > 0 || (appBuild ?? "").Length > 0))
+                        var queued = false;
+                        if (changed && emitsUpdate && ((appVersion ?? "").Length > 0 || (appBuild ?? "").Length > 0))
+                        {
+                            queued = true;
                             result.Signals.Add(new AutoSignal { Type = "pulse.app_updated", PropsJson =
                                 "{\"previousVersion\":" + SignalJson.Quote(lastVersion) + ",\"previousBuild\":" + SignalJson.Quote(lastBuild ?? "") + "}" });
-                        lastVersion = appVersion ?? ""; lastBuild = appBuild ?? "";
+                        }
+                        // The stored version moves only when the event is queued (or nothing changed), so a suppressed update is not lost.
+                        if (queued || !changed || lastVersion == null) { lastVersion = appVersion ?? ""; lastBuild = appBuild ?? ""; }
                     }
                     result.Signals.Add(new AutoSignal { Type = "pulse.session_started" });
                     MarkDirty();

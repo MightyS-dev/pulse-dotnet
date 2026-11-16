@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Text.Json;
+using System.Threading;
 using System.Threading.Tasks;
 using Xunit;
 
@@ -39,8 +40,10 @@ namespace Mightys.Pulse.Tests
         internal PulseClient Client;
         private int seen;
         internal UsageRig(MemoryStorage storage = null, IEnvironmentInfo environment = null, PulseOptions options = null,
-            Func<bool> installIsNew = null, bool withUsage = true)
+            Func<bool> installIsNew = null, bool withUsage = true,
+            Func<TransportRequest, CancellationToken, Task<TransportResponse>> configHandler = null)
         {
+            Transport.ConfigHandler = configHandler;
             Storage = storage ?? new MemoryStorage(); Environment = environment ?? new ExtrasEnvironment();
             Usage = withUsage ? new UsageTracker(() => Storage, t => t.UtcDateTime.ToString("yyyy-MM-dd"), installIsNew) : null;
             Runtime = new PulseRuntime(Clock);
@@ -259,6 +262,50 @@ namespace Mightys.Pulse.Tests
             await updated.Usage.Idle;
             var again = new UsageRig(storage, new ExtrasEnvironment(), new PulseOptions { AppVersion = "1.3.0" }, () => false);
             Assert.DoesNotContain("pulse.app_updated", UsageRig.Types(await again.Send()));
+        }
+
+        [Fact]
+        public async Task RestartInsideIdleWindowWithNewVersionSendsExactlyOneAppUpdated()
+        {
+            var storage = new MemoryStorage();
+            var old = new UsageRig(storage, new BuildEnvironment("1.2.3", "42"), installIsNew: () => false);
+            await old.Send(); await old.Usage.Idle;
+            old.Clock.Advance(60);
+            var upgraded = new UsageRig(storage, new BuildEnvironment("1.3.0", "50"), installIsNew: () => false);
+            upgraded.Clock.Advance((old.Clock.UtcNow - upgraded.Clock.UtcNow).TotalSeconds);
+            var first = await upgraded.Send(); var second = await upgraded.Send("again"); await upgraded.Usage.Idle;
+            Assert.Single(UsageRig.Types(first), "pulse.app_updated");
+            Assert.DoesNotContain("pulse.app_updated", UsageRig.Types(second));
+            var props = first[0].GetProperty("props");
+            Assert.Equal("1.2.3", props.GetProperty("previousVersion").GetString()); Assert.Equal("42", props.GetProperty("previousBuild").GetString());
+            var same = new UsageRig(storage, new BuildEnvironment("1.3.0", "50"), installIsNew: () => false);
+            Assert.DoesNotContain("pulse.app_updated", UsageRig.Types(await same.Send()));
+        }
+
+        [Fact]
+        public async Task StoredVersionIsKeptWhileAppUpdatedIsDisabledByThePortal()
+        {
+            var storage = new MemoryStorage();
+            var old = new UsageRig(storage, new BuildEnvironment("1.2.3", "42"), installIsNew: () => false);
+            await old.Send(); await old.Usage.Idle;
+            storage.Files["config"] = System.Text.Encoding.UTF8.GetBytes("{\"version\":1,\"disabledSignals\":[\"pulse.app_updated\"]}");
+            var off = new UsageRig(storage, new BuildEnvironment("1.3.0", "50"), installIsNew: () => false);
+            Assert.DoesNotContain("pulse.app_updated", UsageRig.Types(await off.Send())); await off.Usage.Idle;
+            storage.Files.Remove("config");
+            var on = new UsageRig(storage, new BuildEnvironment("1.3.0", "50"), installIsNew: () => false);
+            Assert.Contains("pulse.app_updated", UsageRig.Types(await on.Send()));
+        }
+
+        [Fact]
+        public async Task StoredVersionIsKeptWhileCodeTurnsAutomaticSignalsOff()
+        {
+            var storage = new MemoryStorage();
+            var old = new UsageRig(storage, new BuildEnvironment("1.2.3", "42"), installIsNew: () => false);
+            await old.Send(); await old.Usage.Idle;
+            var off = new UsageRig(storage, new BuildEnvironment("1.3.0", "50"), new PulseOptions { AutomaticSignals = false }, () => false);
+            Assert.DoesNotContain("pulse.app_updated", UsageRig.Types(await off.Send())); await off.Usage.Idle;
+            var on = new UsageRig(storage, new BuildEnvironment("1.3.0", "50"), installIsNew: () => false);
+            Assert.Contains("pulse.app_updated", UsageRig.Types(await on.Send()));
         }
 
         [Fact]

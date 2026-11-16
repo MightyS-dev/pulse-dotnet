@@ -58,6 +58,8 @@ namespace Mightys.Pulse
         internal static readonly string[] UsageKeys = { "isNewInstall", "firstSessionDate", "totalSessionsCount", "distinctDaysUsed",
             "distinctDaysUsedLastMonth", "previousSessionSeconds", "averageSessionSeconds", "sessionSeconds" };
 
+        internal static IEnumerable<string> Keys => Rules.Keys;
+
         internal static bool IsKnown(string key) => key != null && Rules.ContainsKey(key);
 
         /// <summary>Returns the value in wire form, or null when the key is unknown, the value is empty or it does not fit the key's format.</summary>

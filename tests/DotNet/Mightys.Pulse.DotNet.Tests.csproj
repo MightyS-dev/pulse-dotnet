@@ -21,6 +21,7 @@
     <Compile Include="$(PulseCoreTestsDir)/RegressionTests.cs" Link="Shared/RegressionTests.cs" />
     <Compile Include="$(PulseCoreTestsDir)/UsageTests.cs" Link="Shared/UsageTests.cs" />
     <Compile Include="$(PulseCoreTestsDir)/DeliveryEdgeCaseTests.cs" Link="Shared/DeliveryEdgeCaseTests.cs" />
+    <Compile Include="$(PulseCoreTestsDir)/RemoteConfigTests.cs" Link="Shared/RemoteConfigTests.cs" />
     <None Include="$(PulseFixturesDir)/v1.jsonc" Link="Fixtures/v1.jsonc" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>

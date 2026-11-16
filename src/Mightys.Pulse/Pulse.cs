@@ -40,6 +40,9 @@ namespace Mightys.Pulse
         /// <summary>Sets an optional user id. Only its SHA-256 hash is kept and sent; pass null to clear it.
         /// <param name="stableUserId">Stable user id, or null.</param></summary>
         public static void SetUser(string stableUserId) => host.Runtime.SetUser(stableUserId);
+        /// <summary>Records a screen view (<c>pulse.screen_view</c>). Names are trimmed to 128 characters; empty names and repeats of the current screen are ignored.
+        /// <param name="name">A fixed screen name, never a URL or text the user typed.</param></summary>
+        public static void Screen(string name) => host.Runtime.Screen(name, false);
         /// <summary>Sends the queue present at the call. Cancellation ends only the wait.
         /// <param name="cancellationToken">Cancels the caller's wait.</param>
         /// <returns>A task that completes when the queue is drained, saved or the wait is cancelled.</returns></summary>

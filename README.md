@@ -17,7 +17,7 @@ dotnet add package Mightys.Pulse
 or in a project file:
 
 ```xml
-<PackageReference Include="Mightys.Pulse" Version="0.9.3" />
+<PackageReference Include="Mightys.Pulse" Version="0.9.4" />
 ```
 
 ## Quick start
@@ -94,6 +94,42 @@ The SDK sends three signals by itself, so you can count installs, updates and se
 properties `previousVersion` and `previousBuild`). They follow opt-out and the `Debug` flag like any other signal, and
 they are rare by design.
 
+### Screen views
+
+Call `Pulse.Screen("Name")` when a screen appears. It sends `pulse.screen_view` with the property `screen` and, when
+there was an earlier screen, `previousScreen`. Names are trimmed and cut to 128 characters, an empty name is ignored, and
+calling it again with the same name as the current screen sends nothing. Use a fixed screen name, never a URL, a title
+that contains user text or anything the user typed. It follows opt-out and the `Debug` flag like any other signal.
+
+```csharp
+Pulse.Screen("Settings");
+```
+
+Plain .NET has no screen concept, so nothing is captured automatically. In a MAUI app, one call from a Shell navigation
+event covers every page:
+
+```csharp
+Shell.Current.Navigating += (_, e) => Pulse.Screen(e.Target.Location.OriginalString.Split('?')[0]);
+```
+
+`PulseOptions.AutomaticScreenViews` (default `true`) only controls integrations that report screens by themselves; the
+.NET package has none, and `Pulse.Screen` always works.
+
+### Settings from the portal
+
+The dashboard can switch things off for your app without a package update: screen views, the automatic signals (all of
+them or one type), and groups of context fields (device, screen, settings and accessibility, network, app, usage). The
+SDK reads these settings once per launch, in the background, saves them next to the offline queue and applies them from
+the next launch, so a change in the dashboard shows up after your users restart the app. Reading them never delays
+`Track` or `Flush`.
+
+Everything is on by default, and stays on whenever the settings cannot be read (no network, an error, nothing saved
+yet). The system fields that every signal needs (platform, OS, app version and build, device model, locale, SDK name and
+version, bundle id) are never switched off. A code option can only switch things off, never force them on: `AutomaticScreenViews = false` stops automatic screen
+capture, `AutomaticSignals = false` stops `pulse.session_started`, `pulse.new_install` and `pulse.app_updated`, even when
+the dashboard has them on. Setting either to `true` does not override the dashboard (the server drops what the
+dashboard switched off). A manual `Pulse.Screen` call is sent whenever the dashboard allows screen views. Turning opt-out on deletes the saved settings with the rest.
+
 ### Anonymous install id
 
 The SDK creates a random install id on first launch and keeps it in the app's own storage folder, next to the offline
@@ -102,7 +138,7 @@ data are removed. It is sent only as a SHA-256 hash. Turning opt-out on deletes 
 one.
 
 Never sent: an advertising id, a device identifier, a cookie, a fingerprint, a machine name, a location, contacts, or
-automatic screen or gameplay events.
+automatic gameplay events.
 
 The SDK does not read or send the device's IP address as data. As with any HTTP request, the server sees the connection
 address; it uses it only to derive a two-letter country code and does not store it.
@@ -129,6 +165,8 @@ Pulse.Initialize("YOUR_APP_KEY",
 | `PulseOptions.Gzip` | `true` | Compress request bodies larger than 1024 bytes. |
 | `PulseOptions.Debug` | Debug build: `true`, otherwise `false` | Marks signals as test data and sends diagnostic messages to `Logger`. See Test mode. |
 | `PulseOptions.AppVersion` | detected | Overrides the detected app version. |
+| `PulseOptions.AutomaticScreenViews` | `true` | Lets platform integrations send screen views by themselves. See Screen views. Wins over the dashboard when you set it. |
+| `PulseOptions.AutomaticSignals` | `true` | Sends `pulse.session_started`, `pulse.new_install`, `pulse.app_updated` and `pulse.screen_view`. Set `false` to stop the first three even when the dashboard has them on. See Settings from the portal. |
 | `PulsePlatformOptions.StorageDirectory` | per-app folder, see Requirements | Folder for the offline queue. |
 | `PulsePlatformOptions.EnvironmentInfo` | detected | OS and app details to send, for hosts where detection does not fit. |
 | `PulsePlatformOptions.Logger` | none | Receives diagnostic strings when `Debug` is on. Do not block in it. |

@@ -24,9 +24,17 @@ namespace Mightys.Pulse.Tests
     {
         internal readonly ConcurrentQueue<TransportRequest> Requests = new ConcurrentQueue<TransportRequest>();
         internal readonly ConcurrentQueue<TransportResponse> Responses = new ConcurrentQueue<TransportResponse>();
+        internal readonly ConcurrentQueue<TransportRequest> ConfigRequests = new ConcurrentQueue<TransportRequest>();
         internal Func<TransportRequest, CancellationToken, Task<TransportResponse>> Handler;
+        // Answers the settings request (GET); by default a 404, which keeps everything on.
+        internal Func<TransportRequest, CancellationToken, Task<TransportResponse>> ConfigHandler;
         public Task<TransportResponse> SendAsync(TransportRequest request, CancellationToken cancellationToken)
         {
+            if (request.IsGet)
+            {
+                ConfigRequests.Enqueue(request);
+                return ConfigHandler != null ? ConfigHandler(request, cancellationToken) : Task.FromResult(new TransportResponse(404));
+            }
             Requests.Enqueue(request);
             return Handler != null ? Handler(request, cancellationToken) :
                 Task.FromResult(Responses.TryDequeue(out var result) ? result : new TransportResponse(202));

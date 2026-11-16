@@ -88,7 +88,7 @@ namespace Mightys.Pulse
         }
 
         // Fixed fields first, then the platform's static extra fields. Keys the platform did not give are left out.
-        internal static string SystemJson(IEnvironmentInfo env, PulseOptions options, HashSet<string> written = null)
+        internal static string SystemJson(IEnvironmentInfo env, PulseOptions options, HashSet<string> written = null, HashSet<string> hidden = null)
         {
             written = written ?? new HashSet<string>(StringComparer.Ordinal);
             var b = new StringBuilder("{");
@@ -102,8 +102,10 @@ namespace Mightys.Pulse
                 "sdkName", "sdkVersion", "bundleId", "signingCertSha256" }) written.Add(key);
             // The SDK's own usage fields are never taken from the platform.
             foreach (var key in SystemFields.UsageKeys) written.Add(key);
+            // Keys the portal settings switch off stay in the written set for good, so no later step adds them.
+            if (hidden != null) foreach (var key in hidden) written.Add(key);
             SystemFields.Append(b, (env as IExtraSystemFields)?.StaticFields, written);
-            foreach (var key in SystemFields.UsageKeys) written.Remove(key);
+            foreach (var key in SystemFields.UsageKeys) if (hidden == null || !hidden.Contains(key)) written.Remove(key);
             return b.Append('}').ToString();
         }
 

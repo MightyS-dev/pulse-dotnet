@@ -62,7 +62,7 @@ namespace Mightys.Pulse.Tests
                 Assert.Empty(Names(fixture.RootElement[0].GetProperty("system")).Except(Names(actual.GetProperty("system"))));
                 Assert.All(extra, key => Assert.True(key == "bundleId" || key == "signingCertSha256", key));
                 Assert.Equal("pulse-dotnet", actual.GetProperty("system").GetProperty("sdkName").GetString());
-                Assert.Equal("0.9.3", actual.GetProperty("system").GetProperty("sdkVersion").GetString());
+                Assert.Equal("0.9.4", actual.GetProperty("system").GetProperty("sdkVersion").GetString());
                 Assert.EndsWith("Z", actual.GetProperty("timestamp").GetString());
                 Assert.Equal(4.5, actual.GetProperty("value").GetDouble());
                 Assert.DoesNotContain("synthetic-person", actual.GetRawText());
@@ -189,11 +189,30 @@ namespace Mightys.Pulse.Tests
         }
 
         [Fact]
+        public async Task SettingsRequestIsAGetWithKeyAndValidatorAndNoBody()
+        {
+            HttpRequestMessage seen = null;
+            using var transport = new HttpClientTransport(new StubHandler((message, _) =>
+            { seen = message; return Task.FromResult(new HttpResponseMessage(HttpStatusCode.NotModified)); }));
+            var request = TransportRequest.ForGet(new Uri("https://example.invalid/api/v1/config"), "synthetic", "\"3\"");
+            var response = await transport.SendAsync(request, CancellationToken.None);
+            Assert.Equal(304, response.StatusCode);
+            Assert.Equal(HttpMethod.Get, seen.Method); Assert.Null(seen.Content);
+            Assert.Equal("synthetic", seen.Headers.GetValues("X-App-Key").Single());
+            Assert.Equal("\"3\"", seen.Headers.GetValues("If-None-Match").Single());
+            seen = null;
+            await transport.SendAsync(TransportRequest.ForGet(new Uri("https://example.invalid/api/v1/config"), "synthetic", null), CancellationToken.None);
+            Assert.False(seen.Headers.Contains("If-None-Match"));
+        }
+
+        [Fact]
         public async Task HungTransportIsBoundedByRequestTimeoutKeepsQueueRetriesAndDeliversOnRecovery()
         {
             var calls = 0; var hungSince = DateTimeOffset.MinValue; var recoveredAt = DateTimeOffset.MinValue;
-            using var transport = new HttpClientTransport(new StubHandler(async (_, token) =>
+            using var transport = new HttpClientTransport(new StubHandler(async (message, token) =>
             {
+                // The once-per-launch settings request is a GET; this test is about the signal batch.
+                if (message.Method == HttpMethod.Get) return new HttpResponseMessage(HttpStatusCode.NotFound);
                 if (Interlocked.Increment(ref calls) == 1)
                 {
                     hungSince = DateTimeOffset.UtcNow;

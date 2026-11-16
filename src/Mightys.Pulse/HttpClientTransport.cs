@@ -32,11 +32,18 @@ namespace Mightys.Pulse
             {
                 using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
                 timeout.CancelAfter(TimeSpan.FromSeconds(request.TimeoutSeconds));
-                using var message = new HttpRequestMessage(HttpMethod.Post, request.Url);
+                using var message = new HttpRequestMessage(request.IsGet ? HttpMethod.Get : HttpMethod.Post, request.Url);
                 message.Headers.Add("X-App-Key", request.AppKey);
-                message.Content = new ByteArrayContent(request.Body);
-                message.Content.Headers.ContentType = new MediaTypeHeaderValue("application/json");
-                if (request.IsGzip) message.Content.Headers.ContentEncoding.Add("gzip");
+                if (request.IsGet)
+                {
+                    if (request.IfNoneMatch != null) message.Headers.TryAddWithoutValidation("If-None-Match", request.IfNoneMatch);
+                }
+                else
+                {
+                    message.Content = new ByteArrayContent(request.Body);
+                    message.Content.Headers.ContentType = new MediaTypeHeaderValue("application/json");
+                    if (request.IsGzip) message.Content.Headers.ContentEncoding.Add("gzip");
+                }
                 using var response = await client.SendAsync(message, HttpCompletionOption.ResponseHeadersRead,
                     timeout.Token).ConfigureAwait(false);
                 var retry = response.Headers.TryGetValues("Retry-After", out var values) ? values.FirstOrDefault() : null;

@@ -4,6 +4,24 @@ All notable changes to this package are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the package follows
 [Semantic Versioning](https://semver.org/).
 
+## [0.9.4] - 2026-11-16
+
+### Added
+
+- Screen views: `Pulse.Screen("Name")` sends `pulse.screen_view` with `screen` and `previousScreen`. Repeats of the
+  current screen are ignored. The new option `PulseOptions.AutomaticScreenViews` (default `true`) controls integrations
+  that capture screens by themselves; the .NET package has none, so you call `Pulse.Screen` yourself, for example from a
+  Shell navigation event in a MAUI app.
+- Settings from the portal: the SDK reads the app's settings once per launch and applies them from the next launch, so
+  the dashboard can switch screen views, automatic signals and groups of context fields on or off without a package
+  update. Everything stays on by default and whenever the settings cannot be read. The new option
+  `PulseOptions.AutomaticSignals` (default `true`) turns the automatic signals off from code. Code options only switch things
+  off; they never override the dashboard.
+
+### Fixed
+
+- Signals captured in the same millisecond keep their order: timestamps are strictly increasing.
+
 ## [0.9.3] - 2026-11-15
 
 ### Added
