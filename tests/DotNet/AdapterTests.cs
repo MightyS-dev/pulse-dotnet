@@ -62,7 +62,7 @@ namespace Mightys.Pulse.Tests
                 Assert.Empty(Names(fixture.RootElement[0].GetProperty("system")).Except(Names(actual.GetProperty("system"))));
                 Assert.All(extra, key => Assert.True(key == "bundleId" || key == "signingCertSha256", key));
                 Assert.Equal("pulse-dotnet", actual.GetProperty("system").GetProperty("sdkName").GetString());
-                Assert.Equal("0.9.4", actual.GetProperty("system").GetProperty("sdkVersion").GetString());
+                Assert.Equal("0.9.5", actual.GetProperty("system").GetProperty("sdkVersion").GetString());
                 Assert.EndsWith("Z", actual.GetProperty("timestamp").GetString());
                 Assert.Equal(4.5, actual.GetProperty("value").GetDouble());
                 Assert.DoesNotContain("synthetic-person", actual.GetRawText());
@@ -186,6 +186,21 @@ namespace Mightys.Pulse.Tests
             Assert.Equal(0, (await transport.SendAsync(request, cancellation.Token).WaitAsync(TimeSpan.FromSeconds(5))).StatusCode);
             using var broken = new HttpClientTransport(new StubHandler((_, __) => throw new HttpRequestException()));
             Assert.Equal(0, (await broken.SendAsync(request, CancellationToken.None)).StatusCode);
+        }
+
+        [Fact]
+        public async Task PostCarriesBatchIdHeaderAndGetDoesNot()
+        {
+            HttpRequestMessage seen = null;
+            using var transport = new HttpClientTransport(new StubHandler((message, _) =>
+            { seen = message; return Task.FromResult(new HttpResponseMessage(HttpStatusCode.Accepted)); }));
+            var id = new string('a', 32);
+            await transport.SendAsync(new TransportRequest(new Uri("https://example.invalid"), "synthetic", new byte[] { 1 }, false, id), CancellationToken.None);
+            Assert.Equal(id, Assert.Single(seen.Headers.GetValues("X-Pulse-Batch")));
+            await transport.SendAsync(new TransportRequest(new Uri("https://example.invalid"), "synthetic", new byte[] { 1 }, false), CancellationToken.None);
+            Assert.False(seen.Headers.Contains("X-Pulse-Batch"));
+            await transport.SendAsync(TransportRequest.ForGet(new Uri("https://example.invalid/api/v1/config"), "synthetic", null), CancellationToken.None);
+            Assert.False(seen.Headers.Contains("X-Pulse-Batch"));
         }
 
         [Fact]

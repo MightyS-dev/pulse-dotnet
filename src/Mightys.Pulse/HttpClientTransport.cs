@@ -42,6 +42,7 @@ namespace Mightys.Pulse
                 {
                     message.Content = new ByteArrayContent(request.Body);
                     message.Content.Headers.ContentType = new MediaTypeHeaderValue("application/json");
+                    if (request.BatchId != null) message.Headers.TryAddWithoutValidation("X-Pulse-Batch", request.BatchId);
                     if (request.IsGzip) message.Content.Headers.ContentEncoding.Add("gzip");
                 }
                 using var response = await client.SendAsync(message, HttpCompletionOption.ResponseHeadersRead,

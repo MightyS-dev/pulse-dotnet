@@ -17,7 +17,7 @@ dotnet add package Mightys.Pulse
 or in a project file:
 
 ```xml
-<PackageReference Include="Mightys.Pulse" Version="0.9.4" />
+<PackageReference Include="Mightys.Pulse" Version="0.9.5" />
 ```
 
 ## Quick start
@@ -197,7 +197,7 @@ Pulse.Initialize("YOUR_APP_KEY", new PulseOptions {
 - Failed sends are retried with exponential backoff (1 second up to 5 minutes), and a server `Retry-After` is respected.
   If the app key is rejected (HTTP 401), sending stops until the next start and the queue is kept. Signals the server
   rejects as invalid are dropped.
-- Delivery is at least once: a batch can arrive twice, so treat duplicates as normal.
+- Delivery is at least once: a batch can arrive twice, so treat duplicates as normal. Each batch carries an id, so a batch sent again after a lost answer is stored only once.
 - A signal can still be lost if the process is killed before it is saved, when the queue limits are reached, or on opt-out.
 
 `Flush` waits until the signals queued at the call have been sent. While offline it stays pending, and the cancellation

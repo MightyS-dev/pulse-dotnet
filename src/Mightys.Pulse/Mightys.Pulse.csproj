@@ -2,7 +2,7 @@
   <PropertyGroup>
     <TargetFrameworks>netstandard2.0;net8.0</TargetFrameworks>
     <PackageId>Mightys.Pulse</PackageId>
-    <Version>0.9.4</Version>
+    <Version>0.9.5</Version>
     <Title>MightyS Pulse for .NET</Title>
     <Authors>MightyS Team</Authors>
     <Copyright>Copyright (c) MightyS Team 2026</Copyright>
