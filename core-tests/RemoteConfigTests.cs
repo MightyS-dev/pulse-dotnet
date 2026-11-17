@@ -96,9 +96,11 @@ namespace Mightys.Pulse.Tests
         public void GroupsCoverTheAllowlistExactlyOnce()
         {
             var all = RemoteConfig.GroupNames.SelectMany(RemoteConfig.KeysOf).ToList();
-            Assert.Equal(46, all.Count);
+            Assert.Equal(50, all.Count);
             Assert.Equal(all.Count, all.Distinct().Count());
-            Assert.Equal(SystemFields.Keys.OrderBy(k => k, StringComparer.Ordinal), all.OrderBy(k => k, StringComparer.Ordinal));
+            // launchMs and droppedAutomatic belong to no group: the portal cannot switch them off.
+            Assert.Equal(SystemFields.Keys.OrderBy(k => k, StringComparer.Ordinal),
+                all.Concat(new[] { "launchMs", "droppedAutomatic" }).OrderBy(k => k, StringComparer.Ordinal));
             Assert.DoesNotContain("bundleId", all);
         }
 
@@ -320,7 +322,7 @@ namespace Mightys.Pulse.Tests
             rig.Runtime.Screen("Home", false);
             var sent = UsageRig.Types(await rig.Send("test"));
             Assert.DoesNotContain(type, sent); Assert.Contains("test", sent);
-            foreach (var other in RemoteConfig.AutomaticTypes.Where(t => t != type && t != "pulse.app_updated"))
+            foreach (var other in RemoteConfig.AutomaticTypes.Take(4).Where(t => t != type && t != "pulse.app_updated"))
                 Assert.Contains(other, sent);
         }
 

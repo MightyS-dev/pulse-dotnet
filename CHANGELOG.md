@@ -4,6 +4,35 @@ All notable changes to this package are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the package follows
 [Semantic Versioning](https://semver.org/).
 
+## [0.9.7] - 2026-11-16
+
+### Added
+
+- App Control: required updates, suggested updates and maintenance windows set in the dashboard, with no screen of its own on .NET.
+  `Pulse.Control.State`, `Pulse.Control.Changed`, `CheckNowAsync()`, `OpenStore()`, `Dismiss()` and `OnForeground()`. It checks once after
+  `Initialize` and when the app comes to the front (at most once in 60 seconds), with 3 and 5 second limits and no retry loop, and fails
+  open: any problem keeps the last known state or `Normal`. The request carries no identity and does not depend on the analytics
+  opt-out. Option `PulseOptions.Control` (`Automatic`, `Manual`, `Off`) and `PulsePlatformOptions.OpenUrl`.
+- Errors and crashes with where they happened: unhandled exceptions are sent as `pulse.error` with the error type, a
+  filtered message and readable stack frames (type, method, file and line). A crash is saved at once and sent at the next
+  start. `Pulse.TrackError(exception, props)` reports an error you handled. Options: `CaptureErrors` (default `true`) and
+  `ErrorDetail` (`Full` or `TypeOnly`). At most 10 reports per error type and session. Emails, URL queries, UUIDs, IP
+  addresses, long numbers and folders of paths are removed on the device.
+- More automatic data: `previousScreenSeconds` on screen views (background time excluded when the host calls
+  `Pulse.ReportForeground` and `Pulse.ReportBackground`), `launchMs` on the first `pulse.session_started` of a run,
+  `foregroundsToday` and `previousForegroundSeconds`, permission statuses (`Pulse.ReportPermission`) with
+  `pulse.permission_changed`, `Pulse.DeepLink(url)` with `pulse.deep_link`, and the opt-in `pulse.app_opened` and
+  `pulse.app_backgrounded` that the dashboard must switch on (`enabledSignals`). Types listed in `pausedSignals` are not sent.
+  Quota guards: per session 20 app_opened, 20 app_backgrounded, 10 deep_link, 5 permission_changed, 100 screen_view; per install
+  and local day 300 automatic signals; the number of dropped ones is sent once as `droppedAutomatic`.
+- Heatmap option `PulseOptions.CaptureHeatmaps` (default `true`, can only switch heatmaps off). Plain .NET has no pointer
+  source and never sends heatmap points or pictures.
+
+### Fixed
+
+- `timeZone` is sent as a canonical zone id. A legacy alias reported by the system (for example `Egypt`) is mapped to its
+  Area/Location id (`Africa/Cairo`), or left out when it cannot be mapped.
+
 ## [0.9.6] - 2026-11-16
 
 ### Fixed

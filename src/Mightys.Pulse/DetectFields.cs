@@ -100,17 +100,35 @@ namespace Mightys.Pulse
             try
             {
                 if (string.IsNullOrEmpty(id)) return null;
-                return IanaZone(id, RuntimeInformation.IsOSPlatform(OSPlatform.Windows), ConvertWindowsId);
+                return IanaZone(id, RuntimeInformation.IsOSPlatform(OSPlatform.Windows), ConvertWindowsId, CanonicalIana);
             }
             catch (Exception) { return null; }
         }
 
-        internal static string IanaZone(string id, bool windows, Func<string, string> convert)
+        internal static string IanaZone(string id, bool windows, Func<string, string> convert, Func<string, string> canonical = null)
         {
             if (string.IsNullOrEmpty(id)) return null;
-            if (!windows) return id.Length <= 64 ? id : null;
+            if (!windows)
+            {
+                if (id.Length > 64) return null;
+                // Area/Location ids and UTC are sent as they are. A legacy alias such as "Egypt" or "Japan" (what
+                // the system reports when the zone file is a link) is mapped to its canonical id, or left out.
+                if (id.IndexOf('/') >= 0 || id == "UTC") return id;
+                var mapped = canonical?.Invoke(id);
+                return !string.IsNullOrEmpty(mapped) && mapped.IndexOf('/') >= 0 && mapped.Length <= 64 ? mapped : null;
+            }
             var iana = convert(id);
             return string.IsNullOrEmpty(iana) ? null : iana;
+        }
+
+        // Alias to canonical through the runtime's own zone tables: alias -> Windows id -> IANA id.
+        private static string CanonicalIana(string id)
+        {
+            var toWindows = typeof(TimeZoneInfo).GetMethod("TryConvertIanaIdToWindowsId", new[] { typeof(string), typeof(string).MakeByRefType() });
+            if (toWindows == null) return null;
+            var args = new object[] { id, null };
+            if (!(bool)toWindows.Invoke(null, args)) return null;
+            return ConvertWindowsId((string)args[1]);
         }
 
         private static string ConvertWindowsId(string id)

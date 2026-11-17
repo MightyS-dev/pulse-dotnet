@@ -113,6 +113,11 @@ namespace Mightys.Pulse.Tests
             Assert.Equal("Europe/Belgrade", DetectFields.IanaZone("Central Europe Standard Time", true, id => id == "Central Europe Standard Time" ? "Europe/Belgrade" : null));
             Assert.Null(DetectFields.IanaZone("Odd Standard Time", true, _ => null)); Assert.Null(DetectFields.IanaZone("", false, _ => null));
             Assert.False(string.IsNullOrEmpty(DetectFields.IanaZone(TimeZoneInfo.Utc.Id)));
+            // A legacy alias reported by the system is sent as its canonical Area/Location id, or not at all.
+            Assert.Equal("Africa/Cairo", DetectFields.IanaZone("Egypt", false, _ => null, a => a == "Egypt" ? "Africa/Cairo" : null));
+            Assert.Null(DetectFields.IanaZone("Nowhere", false, _ => null, _ => null));
+            Assert.Null(DetectFields.IanaZone("Egypt", false, _ => null, _ => "Egypt"));
+            Assert.Equal("UTC", DetectFields.IanaZone("UTC", false, _ => null, _ => null));
         }
 
         [Fact]

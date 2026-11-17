@@ -44,17 +44,18 @@ namespace Mightys.Pulse.Tests
 
     internal sealed class MemoryStorage : IStorage
     {
+        // The runtime writes from its worker thread while a test reads, so every call takes the same lock.
         internal readonly Dictionary<string, byte[]> Files = new Dictionary<string, byte[]>();
         internal int Appends, Replaces;
         internal bool Fail;
         // When set, only calls for this one file fail.
         internal string FailOnly;
         private void Check(string name) { if (Fail || (FailOnly != null && FailOnly == name)) throw new IOException("Synthetic failure."); }
-        public byte[] Read(string name) { Check(name); return Files.TryGetValue(name, out var bytes) ? bytes.ToArray() : null; }
+        public byte[] Read(string name) { lock (Files) { Check(name); return Files.TryGetValue(name, out var bytes) ? bytes.ToArray() : null; } }
         public void Append(string name, byte[] bytes)
-        { Check(name); Appends++; Files[name] = Files.TryGetValue(name, out var old) ? old.Concat(bytes).ToArray() : bytes.ToArray(); }
-        public void Replace(string name, byte[] bytes) { Check(name); Replaces++; Files[name] = bytes.ToArray(); }
-        public void Delete(string name) { Check(name); Files.Remove(name); }
+        { lock (Files) { Check(name); Appends++; Files[name] = Files.TryGetValue(name, out var old) ? old.Concat(bytes).ToArray() : bytes.ToArray(); } }
+        public void Replace(string name, byte[] bytes) { lock (Files) { Check(name); Replaces++; Files[name] = bytes.ToArray(); } }
+        public void Delete(string name) { lock (Files) { Check(name); Files.Remove(name); } }
     }
 
     internal sealed class FakeEnvironment : IEnvironmentInfo

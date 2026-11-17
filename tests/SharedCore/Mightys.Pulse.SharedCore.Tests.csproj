@@ -12,5 +12,6 @@
     <Compile Include="$(PulseCoreDir)/*.cs" Link="Core/%(Filename)%(Extension)" />
     <Compile Include="$(PulseCoreTestsDir)/*.cs" Link="Tests/%(Filename)%(Extension)" />
     <None Include="$(PulseFixturesDir)/v1.jsonc" Link="Fixtures/v1.jsonc" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="$(PulseControlFixturesDir)/*.json" Link="Fixtures/control-v1/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>

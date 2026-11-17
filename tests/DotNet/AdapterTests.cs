@@ -62,7 +62,7 @@ namespace Mightys.Pulse.Tests
                 Assert.Empty(Names(fixture.RootElement[0].GetProperty("system")).Except(Names(actual.GetProperty("system"))));
                 Assert.All(extra, key => Assert.True(key == "bundleId" || key == "signingCertSha256", key));
                 Assert.Equal("pulse-dotnet", actual.GetProperty("system").GetProperty("sdkName").GetString());
-                Assert.Equal("0.9.6", actual.GetProperty("system").GetProperty("sdkVersion").GetString());
+                Assert.Equal("0.9.7", actual.GetProperty("system").GetProperty("sdkVersion").GetString());
                 Assert.EndsWith("Z", actual.GetProperty("timestamp").GetString());
                 Assert.Equal(4.5, actual.GetProperty("value").GetDouble());
                 Assert.DoesNotContain("synthetic-person", actual.GetRawText());

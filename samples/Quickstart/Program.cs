@@ -11,6 +11,8 @@ if (string.IsNullOrWhiteSpace(key))
 
 // A Debug build (the default for dotnet run) marks these signals as test data; a Release build sends real ones.
 // Set PulseOptions.Debug to choose yourself.
+// App Control (required updates, maintenance windows) runs by itself; this only prints when its state changes.
+Pulse.Control.Changed += (_, state) => Console.WriteLine("App Control: " + state.Kind);
 Pulse.Initialize(key, new PulseOptions(), new PulsePlatformOptions { Logger = Console.WriteLine });
 
 Pulse.Track("app_start");

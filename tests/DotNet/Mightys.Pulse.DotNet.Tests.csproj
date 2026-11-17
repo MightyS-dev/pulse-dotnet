@@ -22,6 +22,9 @@
     <Compile Include="$(PulseCoreTestsDir)/UsageTests.cs" Link="Shared/UsageTests.cs" />
     <Compile Include="$(PulseCoreTestsDir)/DeliveryEdgeCaseTests.cs" Link="Shared/DeliveryEdgeCaseTests.cs" />
     <Compile Include="$(PulseCoreTestsDir)/RemoteConfigTests.cs" Link="Shared/RemoteConfigTests.cs" />
+    <Compile Include="$(PulseCoreTestsDir)/ErrorTests.cs" Link="Shared/ErrorTests.cs" />
+    <Compile Include="$(PulseCoreTestsDir)/AutoEventsTests.cs" Link="Shared/AutoEventsTests.cs" />
+    <Compile Include="$(PulseCoreTestsDir)/ControlTestSupport.cs" Link="Shared/ControlTestSupport.cs" />
     <None Include="$(PulseFixturesDir)/v1.jsonc" Link="Fixtures/v1.jsonc" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>

@@ -6,6 +6,7 @@
     <PulseCoreDir>$(MSBuildThisFileDirectory)core</PulseCoreDir>
     <PulseCoreTestsDir>$(MSBuildThisFileDirectory)core-tests</PulseCoreTestsDir>
     <PulseFixturesDir>$(MSBuildThisFileDirectory)core-tests/Fixtures</PulseFixturesDir>
+    <PulseControlFixturesDir>$(MSBuildThisFileDirectory)core-tests/Fixtures/control-v1</PulseControlFixturesDir>
     <LangVersion>9.0</LangVersion>
     <Nullable>disable</Nullable>
     <ImplicitUsings>disable</ImplicitUsings>

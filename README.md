@@ -17,7 +17,7 @@ dotnet add package Mightys.Pulse
 or in a project file:
 
 ```xml
-<PackageReference Include="Mightys.Pulse" Version="0.9.6" />
+<PackageReference Include="Mightys.Pulse" Version="0.9.7" />
 ```
 
 ## Quick start
@@ -88,11 +88,44 @@ opt-out on deletes it together with the install id. If it cannot be written, the
 
 ### Automatic signals
 
-The SDK sends three signals by itself, so you can count installs, updates and sessions without any code:
-`pulse.session_started` (once per session, that is on the first signal of the run and after 30 minutes without one),
-`pulse.new_install` (once, in the first session after install) and `pulse.app_updated` (once per release, with the
-properties `previousVersion` and `previousBuild`). They follow opt-out and the `Debug` flag like any other signal, and
-they are rare by design.
+The SDK sends these signals by itself or when your host reports the event: `pulse.session_started`, `pulse.new_install`,
+`pulse.app_updated`, `pulse.screen_view`, `pulse.permission_changed`, `pulse.deep_link`, `pulse.app_opened`,
+`pulse.app_backgrounded`, `pulse.heatmap` (taps and clicks, see Heatmaps) and, for errors, `pulse.error`. `pulse.app_opened` and `pulse.app_backgrounded` are off until the
+dashboard switches them on. Automatic fields such as `previousScreenSeconds`, `launchMs`, `foregroundsToday`,
+`previousForegroundSeconds`, `notificationPermission`, `trackingPermission` and `droppedAutomatic` add no signals.
+Defaults and what each event costs against your plan are listed at https://pulse.mightys.dev/docs/automatic-signals/.
+
+To switch things off: `PulseOptions.AutomaticSignals` (all automatic signals), `PulseOptions.AutomaticScreenViews`
+(automatic screen capture), `PulseOptions.CaptureErrors` (error capture), `PulseOptions.CaptureHeatmaps` (heatmaps), `Pulse.OptOut` (everything), and in the
+dashboard any single type (`disabledSignals`) or field group. A code option can only switch things off. All of them follow
+the `Debug` flag like any other signal, and the SDK limits itself: per session at most 20 `pulse.app_opened`, 20
+`pulse.app_backgrounded`, 10 `pulse.deep_link`, 5 `pulse.permission_changed` and 100 `pulse.screen_view`, and at most 300
+automatic signals per install and local day. The number of dropped signals is sent once as `droppedAutomatic`.
+
+### Heatmaps
+
+Heatmaps (`pulse.heatmap`) are off until the owner switches them on in the dashboard. They collect only the screen name, the
+position of a tap and its kind (tap or rage), never text, recordings, inputs or the keyboard. Plain .NET has no pointer
+source, so this package sends no heatmap points and no screenshots; `PulseOptions.CaptureHeatmaps` is accepted and only
+ever switches heatmaps off.
+
+Plain .NET has no foreground, permission or deep link concept, so nothing here happens by itself. Your host reports it:
+
+| Host event | Call |
+| --- | --- |
+| The app comes to the foreground (MAUI `Window.Activated`) | `Pulse.ReportForeground(coldStart)` |
+| The app goes to the background (MAUI `Window.Deactivated` or `Stopped`) | `Pulse.ReportBackground()` then `Pulse.OnPauseAsync()` |
+| The app is opened by a link | `Pulse.DeepLink(url)` |
+| You read a permission status | `Pulse.ReportPermission("notification", "granted")` |
+
+Call them after `Initialize`. Repeated reports of the same state are ignored. `ReportBackground` also stops the screen timer, so
+`previousScreenSeconds` (whole seconds the previous screen was visible) never includes background time. The SDK never asks for a permission:
+it only records the status you pass (`notification`: granted, denied, notDetermined, provisional, ephemeral; `tracking`:
+authorized, denied, restricted, notDetermined). `pulse.deep_link` carries `scheme`, `host` and `path` (numeric and uuid-like segments become `:id`, at most 128
+characters) and the three `utm_source`, `utm_medium`, `utm_campaign` tags if present. The query, the fragment and every other
+parameter are never read or sent. `launchMs` is the time from process start to the first signal, left out when it is longer than ten minutes.
+
+`pulse.app_opened` and `pulse.app_backgrounded` are sent only when the dashboard lists them in `enabledSignals` for your app; with no saved settings they are not sent. A type the dashboard pauses (for example near the end of your plan) is not sent. Your own `Track` calls and errors are never limited.
 
 ### Screen views
 
@@ -167,6 +200,11 @@ Pulse.Initialize("YOUR_APP_KEY",
 | `PulseOptions.AppVersion` | detected | Overrides the detected app version. |
 | `PulseOptions.AutomaticScreenViews` | `true` | Lets platform integrations send screen views by themselves. See Screen views. Wins over the dashboard when you set it. |
 | `PulseOptions.AutomaticSignals` | `true` | Sends `pulse.session_started`, `pulse.new_install`, `pulse.app_updated` and `pulse.screen_view`. Set `false` to stop the first three even when the dashboard has them on. See Settings from the portal. |
+| `PulseOptions.CaptureErrors` | `true` | Captures unhandled errors and crashes. Set `false` to install no handler at all. See Errors and crashes. |
+| `PulseOptions.CaptureHeatmaps` | `true` | Follows the dashboard for heatmaps of taps and clicks (off until you switch them on there). Set `false` to never capture them. Plain .NET has no pointer source, so this package never sends heatmap points or pictures; the option exists so one options object works across platforms. See Heatmaps. |
+| `PulseOptions.ErrorDetail` | `Full` | `Full` sends type, filtered message and stack frames; `TypeOnly` sends the error type only. |
+| `PulseOptions.Control` | `ControlMode.Automatic` | App Control: `Automatic` and `Manual` check by themselves and keep the state (this package has no screen of its own), `Off` makes no request. See App Control. |
+| `PulsePlatformOptions.OpenUrl` | system browser on desktop | Opens the address behind `Pulse.Control.OpenStore()`, for example with MAUI `Launcher.OpenAsync`. |
 | `PulsePlatformOptions.StorageDirectory` | per-app folder, see Requirements | Folder for the offline queue. |
 | `PulsePlatformOptions.EnvironmentInfo` | detected | OS and app details to send, for hosts where detection does not fit. |
 | `PulsePlatformOptions.Logger` | none | Receives diagnostic strings when `Debug` is on. Do not block in it. |
@@ -234,6 +272,100 @@ The offline queue folder must be stable, used by one app only, and used by one r
 default on Android and iOS and no fallback to the working directory, so pass your app's data folder as
 `StorageDirectory` there. On mobile, also pass `EnvironmentInfo` built from your framework's device API, for example
 `new DotNetEnvironmentInfo("Android", osVersion, appVersion, buildNumber, locale, deviceModel)`.
+
+## Errors and crashes
+
+By default the SDK reports errors that nobody handled, so you can see where the app broke:
+
+- `AppDomain.UnhandledException` is reported as a crash. It is saved to disk before the process ends and sent the next
+  time the app starts.
+- `TaskScheduler.UnobservedTaskException` is reported as an error. The task is not marked as observed, so the runtime
+  behaves exactly as before.
+
+Handlers that were there before keep running, the SDK never swallows an error and never throws from its own handler.
+
+Each report is a `pulse.error` signal with the error type, a message, up to 30 stack frames (type, method, file name and
+line, for example `MyApp.CartViewModel.Checkout() CartViewModel.cs:42`) and `symbolicated`, which is `false` only when the
+runtime gave no method names. Line numbers need the app's `.pdb` files next to the build.
+
+Report an error you caught yourself:
+
+```csharp
+try { await cart.CheckoutAsync(); }
+catch (Exception ex)
+{
+    Pulse.TrackError(ex, new Dictionary<string, object> { ["step"] = "checkout" });
+    throw;
+}
+```
+
+What is filtered: before anything leaves the device, the message and every frame lose email addresses, query strings and
+fragments of URLs, UUIDs, IPv4 and IPv6 addresses, runs of six or more digits, and the folders of absolute paths (the
+file name stays). Matches become `<filtered>`.
+
+To send only the error type, without message and frames:
+
+```csharp
+Pulse.Initialize("YOUR_APP_KEY", new PulseOptions { ErrorDetail = PulseErrorDetail.TypeOnly });
+```
+
+To turn the automatic capture off completely, set `CaptureErrors = false`. `Pulse.TrackError` still works. At most 10
+error signals per error type are sent in one session, so a loop cannot flood the dashboard. Opting out stops capture and
+deletes a crash that is waiting to be sent. Native crashes of the runtime itself and minified names are not readable yet.
+
+## App Control
+
+App Control lets you require an update, suggest one or put the app into maintenance from the dashboard. It runs by itself after
+`Pulse.Initialize`. This package has no built-in screen: you read the state and draw your own.
+
+```csharp
+Pulse.Control.Changed += (sender, state) =>
+{
+    // Runs on a thread pool thread: switch to the UI thread first.
+    switch (state.Kind)
+    {
+        case ControlKind.UpdateRequired:
+        case ControlKind.VersionBlocked:
+        case ControlKind.Maintenance:
+            ShowFullScreen(state.Title, state.Body, state.ButtonText, state.AllowContinue);
+            break;
+        case ControlKind.UpdateSuggested:
+            ShowDialog(state.Title, state.Body, state.ButtonText, state.DismissText);
+            break;
+        case ControlKind.Normal:
+            HideEverything();
+            break;
+    }
+};
+// The button: Pulse.Control.OpenStore();  "Not now": Pulse.Control.Dismiss();  "Try again": await Pulse.Control.CheckNowAsync();
+```
+
+MAUI: subscribe in `App` or your first page and call `Pulse.Control.OnForeground()` from `Window.Activated`. WPF and WinForms: call it from
+`Application.Activated` or the window's `Activated` event. Plain `Pulse.ReportForeground()` does the same.
+
+| Member | Meaning |
+| --- | --- |
+| `Pulse.Control.State` | The current state: `Kind` (`Normal`, `UpdateSuggested`, `UpdateRequired`, `VersionBlocked`, `Maintenance`, `MaintenanceUpcoming`, `Announcement`, `WhatsNew`), ready-to-show `Title`, `Body`, `ButtonText` in the language of the device (12 built in, English otherwise), `Url`, `StartsAt`, `EndsAt`, `Version`, `AllowContinue`, `IsTestBuild`, `DismissText` and `Extras` (a card or banner that applies at the same time). |
+| `Pulse.Control.Changed` | Raised when the state changes, also when a scheduled window starts or ends. |
+| `Pulse.Control.CheckNowAsync()` | Checks now. Never throws. |
+| `Pulse.Control.OpenStore()` | Opens the store address of the current state in the system browser when the platform allows it (set `PulsePlatformOptions.OpenUrl` elsewhere). |
+| `Pulse.Control.Dismiss()` | Dismisses a suggestion (for 24 hours), a card or the preview lock of a debug build. Does nothing for a lock in a release build. |
+| `Pulse.Control.OnForeground()` | Tells the SDK the app came to the front. It checks again, at most once in 60 seconds. |
+
+Set `PulseOptions.Control = ControlMode.Off` to make no request at all. Opting out of analytics does not switch App Control off, and
+the request carries no app key, no install id and no user id.
+
+For the notes you send with a store submission: "The app checks on launch for required updates and maintenance windows."
+
+### How it fails safely
+
+1. Starting the SDK never waits for the network, and a check never runs on the thread that calls you.
+2. One request per check, 3 seconds to the response headers and 5 seconds in all, no retry loop, and at most one automatic check in 60 seconds.
+3. Any failure (no network, a server error, an answer that cannot be read) keeps the last known state, or `Normal`. Nothing is ever locked because of something unknown.
+4. A lock older than 30 days is ignored, a maintenance window from the saved answer ends at its end time and never lasts more than 72 hours.
+5. There is always a way out: a required update turns into a suggestion when the store version is not newer than the installed one, after three returns from the store on the same version, or when there is no store link. The SDK never closes the app.
+
+In a debug build the rules apply but a lock is shown as a preview (`IsTestBuild`) that can be continued.
 
 ## Requirements
 
