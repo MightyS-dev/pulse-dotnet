@@ -43,10 +43,11 @@ namespace Mightys.Pulse.Tests
             try
             {
                 host.Runtime.Track("pause"); await host.PauseAsync().WaitAsync(TimeSpan.FromSeconds(10));
-                Assert.Equal("pause", Harness.Event(Assert.Single(transport.Requests)).GetProperty("type").GetString());
+                var paused = Harness.Events(transport.Requests);
+                Assert.Equal(new[] { "pause", "pulse.app_backgrounded" }, paused.Select(e => e.GetProperty("type").GetString()));
                 host.Runtime.Track("focus"); Assert.True(host.FocusChangedAsync(true).IsCompleted);
                 await host.FocusChangedAsync(false).WaitAsync(TimeSpan.FromSeconds(10));
-                Assert.Equal(2, Harness.Events(transport.Requests).Length);
+                Assert.Equal(4, Harness.Events(transport.Requests).Length);
             }
             finally { await host.ShutdownAsync(); }
         }
@@ -65,7 +66,7 @@ namespace Mightys.Pulse.Tests
             Assert.True(timer.Elapsed < TimeSpan.FromSeconds(3));
             await first.WaitAsync(TimeSpan.FromSeconds(5));
             var queue = storage.Files.Single(p => p.Key.EndsWith(".bin", StringComparison.Ordinal)).Value;
-            Assert.Single(QueueJournal.Decode(queue, 1000));
+            Assert.Equal(2, QueueJournal.Decode(queue, 1000).Count);
             pending.TrySetResult(new TransportResponse(202));
         }
 

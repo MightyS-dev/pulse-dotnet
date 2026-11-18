@@ -17,7 +17,7 @@ dotnet add package Mightys.Pulse
 or in a project file:
 
 ```xml
-<PackageReference Include="Mightys.Pulse" Version="0.9.7" />
+<PackageReference Include="Mightys.Pulse" Version="0.9.8" />
 ```
 
 ## Quick start
@@ -35,8 +35,22 @@ await Pulse.Flush();                        // optional: send what is queued now
 That is all it takes: users are counted without any further setup. If your app has its own user id, you can call
 `Pulse.SetUser("your-user-id")` to use it instead of the anonymous install id (optional).
 
+In a console app or any short process, send the queue and close cleanly before it exits:
+
+```csharp
+await Pulse.Flush(new CancellationTokenSource(TimeSpan.FromSeconds(10)).Token); // send, waiting at most 10 seconds
+await Pulse.ShutdownAsync();                                                    // save what is left for the next run
+```
+
 Call `Initialize` once at startup. `Track` is thread safe. Public calls never throw into your app and never block the
 calling thread.
+
+## See your first signal
+
+1. Sign in at [app.pulse.mightys.dev](https://app.pulse.mightys.dev) and open the app whose key you used.
+2. A debug or development build sends test data (see Test mode below). Turn on the **Test mode** switch in the bar
+   above the figures to see it; turn it off again for real users.
+3. Open **Live** in the app menu: signals appear there as they arrive. The Overview and the other screens follow shortly.
 
 ## What is sent and what is never sent
 
@@ -90,10 +104,23 @@ opt-out on deletes it together with the install id. If it cannot be written, the
 
 The SDK sends these signals by itself or when your host reports the event: `pulse.session_started`, `pulse.new_install`,
 `pulse.app_updated`, `pulse.screen_view`, `pulse.permission_changed`, `pulse.deep_link`, `pulse.app_opened`,
-`pulse.app_backgrounded`, `pulse.heatmap` (taps and clicks, see Heatmaps) and, for errors, `pulse.error`. `pulse.app_opened` and `pulse.app_backgrounded` are off until the
-dashboard switches them on. Automatic fields such as `previousScreenSeconds`, `launchMs`, `foregroundsToday`,
+`pulse.app_backgrounded`, `pulse.heatmap` (taps and clicks, see Heatmaps) and, for errors, `pulse.error`. `pulse.app_opened` is off until the
+dashboard switches it on. `pulse.app_backgrounded` is on by default when the host reports a background transition. Automatic fields such as `previousScreenSeconds`, `launchMs`, `foregroundsToday`,
 `previousForegroundSeconds`, `notificationPermission`, `trackingPermission` and `droppedAutomatic` add no signals.
 Defaults and what each event costs against your plan are listed at https://pulse.mightys.dev/docs/automatic-signals/.
+
+| Signal | Default | Plan |
+| --- | --- | --- |
+| `pulse.session_started` | On | Free |
+| `pulse.app_opened` | Off, opt in from the dashboard | Free |
+| `pulse.app_backgrounded` | On, when the host reports background | Free |
+| `pulse.new_install` | On | Free |
+| `pulse.app_updated` | On | Free |
+
+These five lifecycle types do not count toward your plan. The SDK saves the session end when the app goes to the background,
+even if the background signal cannot be sent. The signal includes `foregroundSeconds` and the system field `sessionSeconds`;
+the next launch reports `previousSessionSeconds`. A background transition flushes the queue immediately. If delivery cannot
+finish, the saved signal is sent on the next launch with its original timestamp.
 
 To switch things off: `PulseOptions.AutomaticSignals` (all automatic signals), `PulseOptions.AutomaticScreenViews`
 (automatic screen capture), `PulseOptions.CaptureErrors` (error capture), `PulseOptions.CaptureHeatmaps` (heatmaps), `Pulse.OptOut` (everything), and in the
@@ -114,7 +141,7 @@ Plain .NET has no foreground, permission or deep link concept, so nothing here h
 | Host event | Call |
 | --- | --- |
 | The app comes to the foreground (MAUI `Window.Activated`) | `Pulse.ReportForeground(coldStart)` |
-| The app goes to the background (MAUI `Window.Deactivated` or `Stopped`) | `Pulse.ReportBackground()` then `Pulse.OnPauseAsync()` |
+| The app goes to the background (MAUI `Window.Deactivated` or `Stopped`) | `await Pulse.OnPauseAsync()` (also reports background) |
 | The app is opened by a link | `Pulse.DeepLink(url)` |
 | You read a permission status | `Pulse.ReportPermission("notification", "granted")` |
 
@@ -125,7 +152,9 @@ authorized, denied, restricted, notDetermined). `pulse.deep_link` carries `schem
 characters) and the three `utm_source`, `utm_medium`, `utm_campaign` tags if present. The query, the fragment and every other
 parameter are never read or sent. `launchMs` is the time from process start to the first signal, left out when it is longer than ten minutes.
 
-`pulse.app_opened` and `pulse.app_backgrounded` are sent only when the dashboard lists them in `enabledSignals` for your app; with no saved settings they are not sent. A type the dashboard pauses (for example near the end of your plan) is not sent. Your own `Track` calls and errors are never limited.
+`pulse.app_opened` is sent only when the dashboard lists it in `enabledSignals` for your app; with no saved settings it is not sent.
+`pulse.app_backgrounded` is on by default, unless automatic signals are off or the type is in `disabledSignals` or `pausedSignals`.
+A background signal 30 minutes or more after the last signal is dropped and never starts a session. Your own `Track` calls and errors are never limited.
 
 ### Screen views
 
@@ -159,7 +188,7 @@ the next launch, so a change in the dashboard shows up after your users restart 
 Everything is on by default, and stays on whenever the settings cannot be read (no network, an error, nothing saved
 yet). The system fields that every signal needs (platform, OS, app version and build, device model, locale, SDK name and
 version, bundle id) are never switched off. A code option can only switch things off, never force them on: `AutomaticScreenViews = false` stops automatic screen
-capture, `AutomaticSignals = false` stops `pulse.session_started`, `pulse.new_install` and `pulse.app_updated`, even when
+capture, `AutomaticSignals = false` stops automatic lifecycle signals, including `pulse.app_backgrounded`, even when
 the dashboard has them on. Setting either to `true` does not override the dashboard (the server drops what the
 dashboard switched off). A manual `Pulse.Screen` call is sent whenever the dashboard allows screen views. Turning opt-out on deletes the saved settings with the rest.
 
@@ -199,7 +228,7 @@ Pulse.Initialize("YOUR_APP_KEY",
 | `PulseOptions.Debug` | Debug build: `true`, otherwise `false` | Marks signals as test data and sends diagnostic messages to `Logger`. See Test mode. |
 | `PulseOptions.AppVersion` | detected | Overrides the detected app version. |
 | `PulseOptions.AutomaticScreenViews` | `true` | Lets platform integrations send screen views by themselves. See Screen views. Wins over the dashboard when you set it. |
-| `PulseOptions.AutomaticSignals` | `true` | Sends `pulse.session_started`, `pulse.new_install`, `pulse.app_updated` and `pulse.screen_view`. Set `false` to stop the first three even when the dashboard has them on. See Settings from the portal. |
+| `PulseOptions.AutomaticSignals` | `true` | Allows automatic lifecycle signals, including `pulse.app_backgrounded`. Set `false` to stop them even when the dashboard has them on. Manual screen views follow the dashboard. See Settings from the portal. |
 | `PulseOptions.CaptureErrors` | `true` | Captures unhandled errors and crashes. Set `false` to install no handler at all. See Errors and crashes. |
 | `PulseOptions.CaptureHeatmaps` | `true` | Follows the dashboard for heatmaps of taps and clicks (off until you switch them on there). Set `false` to never capture them. Plain .NET has no pointer source, so this package never sends heatmap points or pictures; the option exists so one options object works across platforms. See Heatmaps. |
 | `PulseOptions.ErrorDetail` | `Full` | `Full` sends type, filtered message and stack frames; `TypeOnly` sends the error type only. |
@@ -248,8 +277,9 @@ A desktop, mobile or game host should make three calls. Each returns a `Task`, n
 
 | When | Call | What it does |
 | --- | --- | --- |
-| The app loses focus | `Pulse.OnFocusChangedAsync(false)` | Sends the queue now. |
-| The app goes to the background or is suspended | `Pulse.OnPauseAsync()` | Sends the queue now (best effort: the OS may suspend the app first). |
+| The app gains focus | `Pulse.OnFocusChangedAsync(true)` | Reports foreground and resumes foreground timing. |
+| The app loses focus | `Pulse.OnFocusChangedAsync(false)` | Reports background and sends the queue now. |
+| The app goes to the background or is suspended | `Pulse.OnPauseAsync()` | Saves the session end, reports background and sends the queue now (best effort: the OS may suspend the app first). |
 | The app is closing | `Pulse.ShutdownAsync()` | Saves the queue and stops the SDK for this process. It cannot be restarted. |
 
 ```csharp

@@ -26,11 +26,48 @@ namespace Mightys.Pulse.Tests
             Pulse.ReportPermission("notification", "granted"); Pulse.ReportPermission(null, null);
         }
 
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public async Task PauseAndFocusHooksReportOneBackgroundAndPersistTheEnd(bool focus)
+        {
+            var clock = new FakeClock(); var storage = new MemoryStorage(); var transport = new FakeTransport();
+            var host = new PulseHost(clock, storage, transport);
+            host.Initialize("synthetic", new PulseOptions { FlushIntervalSeconds = 3600, Control = ControlMode.Off },
+                new PulsePlatformOptions { EnvironmentInfo = new FakeEnvironment() });
+            try
+            {
+                host.Runtime.Track("start"); await host.Runtime.Flush().WaitAsync(TimeSpan.FromSeconds(10));
+                clock.Advance(17);
+                await (focus ? host.FocusChangedAsync(false) : host.PauseAsync()).WaitAsync(TimeSpan.FromSeconds(10));
+                await host.PauseAsync().WaitAsync(TimeSpan.FromSeconds(10));
+                host.Runtime.ReportBackground();
+                var background = Assert.Single(Harness.Events(transport.Requests), e => e.GetProperty("type").GetString() == "pulse.app_backgrounded");
+                Assert.Equal("17", background.GetProperty("system").GetProperty("sessionSeconds").GetString());
+                Assert.Equal(17, background.GetProperty("props").GetProperty("foregroundSeconds").GetInt32());
+                await host.Usage.Idle;
+            }
+            finally { await host.ShutdownAsync(); }
+            var nextTransport = new FakeTransport(); var next = new PulseHost(clock, storage, nextTransport);
+            next.Initialize("synthetic", new PulseOptions { Control = ControlMode.Off }, new PulsePlatformOptions { EnvironmentInfo = new FakeEnvironment() });
+            try
+            {
+                next.Runtime.Track("next_launch"); await next.Runtime.Flush().WaitAsync(TimeSpan.FromSeconds(10));
+                var signal = Harness.Events(nextTransport.Requests).Last();
+                Assert.Equal("17", signal.GetProperty("system").GetProperty("previousSessionSeconds").GetString());
+                clock.Advance(1); await next.FocusChangedAsync(false).WaitAsync(TimeSpan.FromSeconds(10));
+                await next.FocusChangedAsync(true); clock.Advance(1);
+                await next.FocusChangedAsync(false).WaitAsync(TimeSpan.FromSeconds(10));
+                Assert.Equal(2, Harness.Events(nextTransport.Requests).Count(e => e.GetProperty("type").GetString() == "pulse.app_backgrounded"));
+            }
+            finally { await next.ShutdownAsync(); }
+        }
+
         [Fact]
         public async Task HostSendsLaunchMsOnTheColdSessionAndTheReportedEvents()
         {
             var storage = new MemoryStorage();
-            storage.Files["config"] = Encoding.UTF8.GetBytes("{\"enabledSignals\":[\"pulse.app_opened\",\"pulse.app_backgrounded\"]}");
+            storage.Files["config"] = Encoding.UTF8.GetBytes("{\"enabledSignals\":[\"pulse.app_opened\"]}");
             var transport = new FakeTransport();
             var host = new PulseHost(storage: storage, transport: transport);
             host.Initialize("synthetic", new PulseOptions(), new PulsePlatformOptions { EnvironmentInfo = new FakeEnvironment() });

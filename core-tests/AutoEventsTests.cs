@@ -8,7 +8,7 @@ using Xunit;
 
 namespace Mightys.Pulse.Tests
 {
-    // AE1: automatic events, quota guards and the new fields.
+    // Automatic events, quota guards and session timing.
     public sealed class AutoEventsTests
     {
         private const string OptIn = "{\"version\":1,\"enabledSignals\":[\"pulse.app_opened\",\"pulse.app_backgrounded\"]}";
@@ -20,12 +20,13 @@ namespace Mightys.Pulse.Tests
             internal readonly MemoryStorage Storage;
             internal readonly PulseRuntime Runtime;
             internal PulseClient Client;
+            internal readonly UsageTracker Usage;
             private int seen;
             internal Rig(string config = null, PulseOptions options = null, MemoryStorage storage = null, bool usage = true, Func<DateTimeOffset, long?> launch = null)
             {
                 Storage = storage ?? new MemoryStorage();
                 if (config != null) Storage.Files["config"] = Encoding.UTF8.GetBytes(config);
-                var tracker = usage ? new UsageTracker(() => Storage, t => t.UtcDateTime.ToString("yyyy-MM-dd")) : null;
+                var tracker = Usage = usage ? new UsageTracker(() => Storage, t => t.UtcDateTime.ToString("yyyy-MM-dd")) : null;
                 Runtime = new PulseRuntime(Clock);
                 Runtime.InstallPlatform((k, o, optOut) =>
                 {
@@ -77,17 +78,103 @@ namespace Mightys.Pulse.Tests
         // ---- opt-in rule and portal switches ----
 
         [Fact]
-        public async Task OptInEventsAreNotSentWithoutACachedListOrWithAFailedRead()
+        public async Task BackgroundIsDefaultAndOpenedStillNeedsACachedOptIn()
         {
             foreach (var rig in new[] { new Rig(), new Rig("{\"version\":1}"), new Rig("{broken") })
             {
                 rig.Foreground(true); rig.Background();
                 var types = Types(await rig.Sent());
-                Assert.DoesNotContain("pulse.app_opened", types); Assert.DoesNotContain("pulse.app_backgrounded", types);
+                Assert.DoesNotContain("pulse.app_opened", types); Assert.Single(types, t => t == "pulse.app_backgrounded");
             }
             var unreadable = new Rig(storage: new MemoryStorage { FailOnly = "config" });
             unreadable.Foreground(true);
-            Assert.DoesNotContain("pulse.app_opened", Types(await unreadable.Sent()));
+            unreadable.Background();
+            var unreadableTypes = Types(await unreadable.Sent());
+            Assert.DoesNotContain("pulse.app_opened", unreadableTypes);
+            Assert.Single(unreadableTypes, t => t == "pulse.app_backgrounded");
+        }
+
+        [Fact]
+        public async Task BackgroundFlushesOnceWithSessionSecondsWithoutWaitingForTheInterval()
+        {
+            var rig = new Rig(options: new PulseOptions { FlushIntervalSeconds = 3600 });
+            rig.Runtime.Track("start"); await rig.Sent();
+            rig.Clock.Advance(17); rig.Background(); rig.Background();
+            Assert.Equal(1, rig.Client.WaiterCount);
+            await rig.Client.ProcessAsync();
+            var background = Assert.Single(Harness.Events(rig.Transport.Requests), e => e.GetProperty("type").GetString() == "pulse.app_backgrounded");
+            Assert.Equal("17", Sys(background, "sessionSeconds"));
+            Assert.Equal("17", Prop(background, "foregroundSeconds"));
+            Assert.Equal(0, rig.Client.WaiterCount);
+        }
+
+        [Fact]
+        public async Task BackgroundDuringAnEarlierSendExtendsTheSameFlushToTheNewSignal()
+        {
+            var rig = new Rig(options: new PulseOptions { FlushIntervalSeconds = 3600 });
+            rig.Runtime.Track("start"); await rig.Sent();
+            var entered = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+            var response = new TaskCompletionSource<TransportResponse>(TaskCreationOptions.RunContinuationsAsynchronously);
+            rig.Transport.Handler = (_, __) => { entered.TrySetResult(true); return response.Task; };
+            rig.Clock.Advance(1); rig.Background();
+            var flush = rig.Runtime.FlushInBackground(TimeSpan.FromMinutes(1));
+            var processing = rig.Client.ProcessAsync();
+            await entered.Task.WaitAsync(TimeSpan.FromSeconds(10));
+            rig.Foreground(); rig.Clock.Advance(1); rig.Background();
+            Assert.Same(flush, rig.Runtime.FlushInBackground(TimeSpan.FromMinutes(1)));
+            Assert.Equal(1, rig.Client.WaiterCount);
+            response.SetResult(new TransportResponse(202));
+            await processing.WaitAsync(TimeSpan.FromSeconds(10));
+            await flush.WaitAsync(TimeSpan.FromSeconds(10));
+            Assert.Equal(2, Harness.Events(rig.Transport.Requests).Count(e => e.GetProperty("type").GetString() == "pulse.app_backgrounded"));
+            Assert.Equal(0, rig.Client.Count);
+        }
+
+        [Theory]
+        [InlineData("{\"disabledSignals\":[\"pulse.app_backgrounded\"]}", true)]
+        [InlineData("{\"pausedSignals\":[\"pulse.app_backgrounded\"]}", true)]
+        [InlineData("{\"automaticSignals\":false}", true)]
+        [InlineData(null, false)]
+        public async Task SuppressedBackgroundStillPersistsTheEndBeforeTheNextLaunch(string config, bool automatic)
+        {
+            var rig = new Rig(config, new PulseOptions { AutomaticSignals = automatic });
+            rig.Runtime.Track("start"); await rig.Sent(); await rig.Usage.Idle;
+            // Shorter than the usual persistence interval: this must force a usage write.
+            rig.Clock.Advance(17); rig.Background();
+            Assert.DoesNotContain("pulse.app_backgrounded", Types(await rig.Sent()));
+            await rig.Usage.Idle;
+            var next = new Rig(storage: rig.Storage);
+            next.Clock.Advance(120);
+            Assert.Equal("17", Sys((await next.Send("next_launch")).Last(), "previousSessionSeconds"));
+        }
+
+        [Fact]
+        public async Task FailedBackgroundIsDurableAndRetriedWithItsOriginalTimestampAndSessionLength()
+        {
+            var rig = new Rig(); rig.Runtime.Track("start"); await rig.Sent();
+            rig.Clock.Advance(60); rig.Transport.Reply(500); rig.Background(); await rig.Sent();
+            await rig.Usage.Idle;
+            var original = Assert.Single(Harness.Events(rig.Transport.Requests), e => e.GetProperty("type").GetString() == "pulse.app_backgrounded");
+            var saved = Assert.Single(QueueJournal.Decode(rig.Storage.Read(rig.Client.QueueName), 1000));
+            Assert.Equal(original.GetRawText(), saved.Json);
+            await rig.Runtime.StopAsync();
+            var next = new Rig(storage: rig.Storage); next.Clock.Advance(120);
+            var events = await next.Send("next_launch");
+            var retried = Assert.Single(events, e => e.GetProperty("type").GetString() == "pulse.app_backgrounded");
+            Assert.Equal(original.GetRawText(), retried.GetRawText());
+            Assert.Equal("60", Sys(retried, "sessionSeconds"));
+            Assert.Equal("60", Sys(Last(events, "next_launch"), "previousSessionSeconds"));
+        }
+
+        [Fact]
+        public async Task DefaultBackgroundCapStillSavesTheLastBackgroundEnd()
+        {
+            var rig = new Rig(); rig.Runtime.Track("start");
+            for (var i = 0; i < 25; i++) { rig.Foreground(); rig.Clock.Advance(1); rig.Background(); }
+            Assert.Equal(20, Types(await rig.Sent()).Count(t => t == "pulse.app_backgrounded"));
+            await rig.Usage.Idle;
+            var next = new Rig(storage: rig.Storage); next.Clock.Advance(120);
+            Assert.Equal("25", Sys(Last(await next.Send("next_launch"), "next_launch"), "previousSessionSeconds"));
         }
 
         [Fact]

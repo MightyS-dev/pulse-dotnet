@@ -57,7 +57,7 @@ namespace Mightys.Pulse
         /// <param name="coldStart">True for the first foreground after the process started.</param></summary>
         public static void ReportForeground(bool coldStart = false) => host.Runtime.ReportForeground(coldStart);
         /// <summary>Call when the host app goes to the background (for example MAUI <c>Window.Deactivated</c> or <c>Stopped</c>). Time in the background is excluded from <c>previousScreenSeconds</c>.
-        /// Sends <c>pulse.app_backgrounded</c> when the portal has switched it on. Call <see cref="OnPauseAsync"/> after it to flush.</summary>
+        /// Saves the session end, sends <c>pulse.app_backgrounded</c> by default when automatic signals are allowed, and requests an immediate best effort flush.</summary>
         public static void ReportBackground() => host.Runtime.ReportBackground();
         /// <summary>Reports a permission status you read yourself (the SDK never asks for permissions): <c>notification</c> with granted, denied, notDetermined, provisional or ephemeral; <c>tracking</c> with authorized, denied, restricted or notDetermined.
         /// The status is added to every signal, and a change from the last known status sends <c>pulse.permission_changed</c> once.
@@ -74,9 +74,9 @@ namespace Mightys.Pulse
         public static PulseControl Control => host.Runtime.Control;
         /// <summary>Opt-out switch. Setting it to true clears the queue, forgets the user and is remembered across restarts.</summary>
         public static bool OptOut { get => host.Runtime.OptOut; set => host.Runtime.OptOut = value; }
-        /// <summary>Call when the app is suspended or stopped; requests a best effort flush.</summary>
+        /// <summary>Call when the app is suspended or stopped; reports the background transition and requests a best effort flush.</summary>
         public static Task OnPauseAsync() => host.PauseAsync();
-        /// <summary>Call when window focus changes; losing focus requests a flush.
+        /// <summary>Call when window focus changes; losing focus reports background and requests a flush, gaining focus reports foreground.
         /// <param name="hasFocus">True when the app gained focus.</param></summary>
         public static Task OnFocusChangedAsync(bool hasFocus) => host.FocusChangedAsync(hasFocus);
         /// <summary>Bounded final save, without waiting for HTTP. Terminal for this process.</summary>
@@ -165,11 +165,15 @@ namespace Mightys.Pulse
             catch (Exception) { return false; }
         }
 
-        internal Task PauseAsync() => Runtime.FlushInBackground(TimeSpan.FromMinutes(1));
+        internal Task PauseAsync()
+        {
+            Runtime.ReportBackground();
+            return Runtime.FlushInBackground(TimeSpan.FromMinutes(1));
+        }
         internal Task FocusChangedAsync(bool hasFocus)
         {
             if (!hasFocus) return PauseAsync();
-            Runtime.Control.OnForeground();
+            Runtime.ReportForeground(false);
             return Task.CompletedTask;
         }
         internal Task ShutdownAsync()

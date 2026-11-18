@@ -2,7 +2,7 @@
   <PropertyGroup>
     <TargetFrameworks>netstandard2.0;net8.0</TargetFrameworks>
     <PackageId>Mightys.Pulse</PackageId>
-    <Version>0.9.7</Version>
+    <Version>0.9.8</Version>
     <Title>MightyS Pulse for .NET</Title>
     <Authors>MightyS Team</Authors>
     <Copyright>Copyright (c) MightyS Team 2026</Copyright>
@@ -14,7 +14,7 @@
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageIcon>icon.png</PackageIcon>
-    <PackageReleaseNotes>Every signal now carries device, app, language, time zone and usage fields with no setup, plus three automatic signals: pulse.session_started, pulse.new_install and pulse.app_updated. Apps can add screen size, colour scheme and similar values through PulsePlatformOptions.HostFields.</PackageReleaseNotes>
+    <PackageReleaseNotes>Session length: the SDK reports when the app goes to the background, so sessions show their real length. `pulse.app_backgrounded` is on by default and does not count toward your plan.</PackageReleaseNotes>
     <IncludeSymbols>true</IncludeSymbols>
     <SymbolPackageFormat>snupkg</SymbolPackageFormat>
     <EmbedUntrackedSources>true</EmbedUntrackedSources>
